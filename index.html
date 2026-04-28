@@ -100,8 +100,14 @@
   </style>
 </head>
 <body>
-  <!-- Hidden IntaSend trigger button -->
-  <button id="intaSendBtn" data-amount="100" data-currency="KES" style="display:none;">Pay with IntaSend</button>
+  <!-- Hidden IntaSend trigger button (must have class intaSendPayButton) -->
+  <button 
+    id="intaSendBtn" 
+    class="intaSendPayButton"
+    data-amount="100" 
+    data-currency="KES" 
+    style="display:none;"
+  >Pay with IntaSend</button>
 
   <header class="top-bar">
     <div class="logo"><i class="fas fa-bolt"></i> ElectroHub <span class="blockchain-badge">BLOCKCHAIN</span></div>
@@ -220,261 +226,279 @@
 
   <script>
     (function() {
-      let products = [];
-      let cart = [];
-      let currentCategory = 'all';
-      let searchTerm = '';
+      // Wait for DOM and SDK
+      document.addEventListener('DOMContentLoaded', function() {
 
-      // ==================== BLOCKCHAIN ====================
-      class Block {
-        constructor(index, timestamp, data, previousHash = '') {
-          this.index = index; this.timestamp = timestamp; this.data = data; this.previousHash = previousHash; this.nonce = 0; this.hash = this.calculateHash();
+        // Initialize IntaSend SDK once (if present)
+        if (window.IntaSend && window.IntaSend.init) {
+          window.IntaSend.init({
+            publicAPIKey: 'ISPubKey_test_xxxxxxxxxxxxxxxxxxxx',  // ← Replace with your test key
+            live: false
+          });
         }
-        calculateHash() { return this.sha256(this.index + this.previousHash + this.timestamp + JSON.stringify(this.data) + this.nonce); }
-        sha256(str) { let hash=0; for(let i=0;i<str.length;i++){ const c=str.charCodeAt(i); hash=((hash<<5)-hash)+c; hash|=0; } return '0x'+(hash>>>0).toString(16).padStart(8,'0'); }
-        mineBlock(difficulty) { while(this.hash.substring(0,difficulty)!==Array(difficulty+1).join('0')){ this.nonce++; this.hash=this.calculateHash(); } }
-      }
-      class Blockchain {
-        constructor() { this.chain=[this.createGenesisBlock()]; this.difficulty=2; }
-        createGenesisBlock() { return new Block(0, new Date().toISOString(), {type:"genesis"}, "0"); }
-        getLatestBlock() { return this.chain[this.chain.length-1]; }
-        addBlock(newBlock) { newBlock.previousHash=this.getLatestBlock().hash; newBlock.mineBlock(this.difficulty); this.chain.push(newBlock); this.saveChain(); }
-        isChainValid() { for(let i=1;i<this.chain.length;i++){ const curr=this.chain[i]; const prev=this.chain[i-1]; if(curr.hash!==curr.calculateHash()||curr.previousHash!==prev.hash) return false; } return true; }
-        saveChain() { localStorage.setItem('electrohub_chain', JSON.stringify(this.chain)); }
-        loadChain() { const saved=localStorage.getItem('electrohub_chain'); if(saved){ const parsed=JSON.parse(saved); this.chain=parsed.map(b=>{ const block=new Block(b.index,b.timestamp,b.data,b.previousHash); block.nonce=b.nonce; block.hash=b.hash; return block; }); } }
-        getChainHTML() { return this.chain.map(b=>`<div style="border-bottom:1px solid #ccc; padding:0.3rem 0;"><strong>Block #${b.index}</strong> <span style="color:#1b5e20;">${b.hash.substring(0,10)}...</span><br><small>Prev: ${b.previousHash.substring(0,10)}... | Nonce: ${b.nonce}</small><br><small>Data: ${JSON.stringify(b.data)}</small></div>`).join(''); }
-      }
-      const blockchain = new Blockchain();
-      blockchain.loadChain();
 
-      // ==================== SIMPLE AGI (offline) ====================
-      function processAGI(message) {
-        const msg = message.toLowerCase().trim();
-        if (msg.includes('hello')||msg.includes('hi')) return "Hello! I'm ElectroHub AGI. Ask me about products or our blockchain.";
-        if (msg.includes('recommend')||msg.includes('suggest')) { const r=products[Math.floor(Math.random()*products.length)]; return `I recommend: ${r.name} at KES ${r.priceKES.toLocaleString()}.`; }
-        if (msg.includes('blockchain')||msg.includes('chain')) { const len=blockchain.chain.length, valid=blockchain.isChainValid()?"valid ✅":"INVALID ❌"; return `Our blockchain has ${len} blocks. It is ${valid}.`; }
-        const found=products.find(p=>msg.includes(p.name.toLowerCase()));
-        if(found) return `I found "${found.name}" - KES ${found.priceKES.toLocaleString()}, category: ${found.category}.`;
-        return "I'm still learning. Try 'recommend', 'blockchain', or ask about a product name.";
-      }
+        let products = [];
+        let cart = [];
+        let currentCategory = 'all';
+        let searchTerm = '';
 
-      // ==================== LOAD PRODUCTS ====================
-      async function loadProducts() {
-        try {
-          const res = await fetch('products.json');
-          if (!res.ok) throw new Error('Network error');
-          products = await res.json();
-          populateCategories();
-          renderProducts();
-          updateCartUI();
-          document.querySelector('.sidebar li[data-category="all"]').style.fontWeight = 'bold';
-        } catch(e) {
-          console.error(e);
-          document.getElementById('productGrid').innerHTML = '<p>Error loading products. Please try again later.</p>';
+        // ==================== BLOCKCHAIN ====================
+        class Block {
+          constructor(index, timestamp, data, previousHash = '') {
+            this.index = index; this.timestamp = timestamp; this.data = data; this.previousHash = previousHash; this.nonce = 0; this.hash = this.calculateHash();
+          }
+          calculateHash() { return this.sha256(this.index + this.previousHash + this.timestamp + JSON.stringify(this.data) + this.nonce); }
+          sha256(str) { let hash=0; for(let i=0;i<str.length;i++){ const c=str.charCodeAt(i); hash=((hash<<5)-hash)+c; hash|=0; } return '0x'+(hash>>>0).toString(16).padStart(8,'0'); }
+          mineBlock(difficulty) { while(this.hash.substring(0,difficulty)!==Array(difficulty+1).join('0')){ this.nonce++; this.hash=this.calculateHash(); } }
         }
-      }
+        class Blockchain {
+          constructor() { this.chain=[this.createGenesisBlock()]; this.difficulty=2; }
+          createGenesisBlock() { return new Block(0, new Date().toISOString(), {type:"genesis"}, "0"); }
+          getLatestBlock() { return this.chain[this.chain.length-1]; }
+          addBlock(newBlock) { newBlock.previousHash=this.getLatestBlock().hash; newBlock.mineBlock(this.difficulty); this.chain.push(newBlock); this.saveChain(); }
+          isChainValid() { for(let i=1;i<this.chain.length;i++){ const curr=this.chain[i]; const prev=this.chain[i-1]; if(curr.hash!==curr.calculateHash()||curr.previousHash!==prev.hash) return false; } return true; }
+          saveChain() { localStorage.setItem('electrohub_chain', JSON.stringify(this.chain)); }
+          loadChain() { const saved=localStorage.getItem('electrohub_chain'); if(saved){ const parsed=JSON.parse(saved); this.chain=parsed.map(b=>{ const block=new Block(b.index,b.timestamp,b.data,b.previousHash); block.nonce=b.nonce; block.hash=b.hash; return block; }); } }
+          getChainHTML() { return this.chain.map(b=>`<div style="border-bottom:1px solid #ccc; padding:0.3rem 0;"><strong>Block #${b.index}</strong> <span style="color:#1b5e20;">${b.hash.substring(0,10)}...</span><br><small>Prev: ${b.previousHash.substring(0,10)}... | Nonce: ${b.nonce}</small><br><small>Data: ${JSON.stringify(b.data)}</small></div>`).join(''); }
+        }
+        const blockchain = new Blockchain();
+        blockchain.loadChain();
 
-      function populateCategories() {
-        const cats = [...new Set(products.map(p=>p.category))];
-        let html = '<li data-category="all"><i class="fas fa-th-large"></i> All</li>';
-        cats.forEach(c => { html += `<li data-category="${c}"><i class="fas fa-tag"></i> ${c}</li>`; });
-        document.getElementById('categoryList').innerHTML = html;
-        document.querySelectorAll('.sidebar li[data-category]').forEach(item => {
-          item.addEventListener('click', function() {
-            document.querySelectorAll('.sidebar li[data-category]').forEach(li=>li.style.fontWeight='normal');
-            this.style.fontWeight='bold';
-            currentCategory = this.getAttribute('data-category');
+        // ==================== SIMPLE AGI ====================
+        function processAGI(message) {
+          const msg = message.toLowerCase().trim();
+          if (msg.includes('hello')||msg.includes('hi')) return "Hello! I'm ElectroHub AGI. Ask me about products or our blockchain.";
+          if (msg.includes('recommend')||msg.includes('suggest')) { const r=products[Math.floor(Math.random()*products.length)]; return `I recommend: ${r.name} at KES ${r.priceKES.toLocaleString()}.`; }
+          if (msg.includes('blockchain')||msg.includes('chain')) { const len=blockchain.chain.length, valid=blockchain.isChainValid()?"valid ✅":"INVALID ❌"; return `Our blockchain has ${len} blocks. It is ${valid}.`; }
+          const found=products.find(p=>msg.includes(p.name.toLowerCase()));
+          if(found) return `I found "${found.name}" - KES ${found.priceKES.toLocaleString()}, category: ${found.category}.`;
+          return "I'm still learning. Try 'recommend', 'blockchain', or ask about a product name.";
+        }
+
+        // ==================== LOAD PRODUCTS ====================
+        async function loadProducts() {
+          try {
+            const res = await fetch('products.json');
+            if (!res.ok) throw new Error('Network error');
+            products = await res.json();
+            populateCategories();
             renderProducts();
-          });
-        });
-      }
+            updateCartUI();
+            document.querySelector('.sidebar li[data-category="all"]').style.fontWeight = 'bold';
+          } catch(e) {
+            console.error(e);
+            document.getElementById('productGrid').innerHTML = '<p>Error loading products. Please try again later.</p>';
+          }
+        }
 
-      function renderProducts() {
-        const filtered = products.filter(p => {
-          const mc = currentCategory === 'all' || p.category === currentCategory;
-          const ms = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-          return mc && ms;
-        });
-        document.getElementById('productGrid').innerHTML = filtered.map(p => `
-          <div class="product-card">
-            <div class="product-img">
-              <img src="${p.image}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
-              <i class="fas ${p.icon||'fa-box'} fallback-icon" style="display:none;"></i>
-            </div>
-            <div class="product-info">
-              <div class="product-name" title="${p.name}">${p.name}</div>
-              <div class="product-price">KES ${p.priceKES.toLocaleString()}</div>
-              <div class="product-meta">
-                <span><i class="fas fa-tag"></i> ${p.category}</span>
-                <span><i class="fas fa-star" style="color:#ffb300;"></i> ${p.rating||'4.5'}</span>
+        function populateCategories() {
+          const cats = [...new Set(products.map(p=>p.category))];
+          let html = '<li data-category="all"><i class="fas fa-th-large"></i> All</li>';
+          cats.forEach(c => { html += `<li data-category="${c}"><i class="fas fa-tag"></i> ${c}</li>`; });
+          document.getElementById('categoryList').innerHTML = html;
+          document.querySelectorAll('.sidebar li[data-category]').forEach(item => {
+            item.addEventListener('click', function() {
+              document.querySelectorAll('.sidebar li[data-category]').forEach(li=>li.style.fontWeight='normal');
+              this.style.fontWeight='bold';
+              currentCategory = this.getAttribute('data-category');
+              renderProducts();
+            });
+          });
+        }
+
+        function renderProducts() {
+          const filtered = products.filter(p => {
+            const mc = currentCategory === 'all' || p.category === currentCategory;
+            const ms = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+            return mc && ms;
+          });
+          document.getElementById('productGrid').innerHTML = filtered.map(p => `
+            <div class="product-card">
+              <div class="product-img">
+                <img src="${p.image}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+                <i class="fas ${p.icon||'fa-box'} fallback-icon" style="display:none;"></i>
               </div>
-              <button class="add-to-cart" data-id="${p.id}">
-                <i class="fas fa-cart-plus"></i> Add to Cart
-              </button>
+              <div class="product-info">
+                <div class="product-name" title="${p.name}">${p.name}</div>
+                <div class="product-price">KES ${p.priceKES.toLocaleString()}</div>
+                <div class="product-meta">
+                  <span><i class="fas fa-tag"></i> ${p.category}</span>
+                  <span><i class="fas fa-star" style="color:#ffb300;"></i> ${p.rating||'4.5'}</span>
+                </div>
+                <button class="add-to-cart" data-id="${p.id}">
+                  <i class="fas fa-cart-plus"></i> Add to Cart
+                </button>
+              </div>
             </div>
-          </div>
-        `).join('');
-        document.querySelectorAll('.add-to-cart').forEach(btn => {
-          btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            addToCart(parseInt(this.getAttribute('data-id')));
-          });
-        });
-      }
-
-      function addToCart(productId) {
-        const existing = cart.find(i => i.id === productId);
-        if (existing) { existing.quantity++; }
-        else { const p = products.find(pp => pp.id === productId); if (p) cart.push({...p, quantity:1}); }
-        const p = products.find(pp => pp.id === productId);
-        blockchain.addBlock(new Block(blockchain.chain.length, new Date().toISOString(), {type:"cart_add",productId,pname:p.name}));
-        updateCartUI();
-        document.getElementById('cartModal').style.display = 'flex';
-      }
-
-      function removeFromCart(productId) { cart = cart.filter(i => i.id !== productId); updateCartUI(); }
-
-      function updateCartUI() {
-        const totalItems = cart.reduce((s,i)=>s+i.quantity,0);
-        document.getElementById('cartCount').textContent = totalItems;
-        const list = document.getElementById('cartItemsList');
-        const tot = document.getElementById('cartTotal');
-        if (cart.length === 0) {
-          list.innerHTML = '<li style="justify-content:center;color:#666;">Your cart is empty</li>';
-          tot.textContent = 'Total: KES 0.00';
-        } else {
-          list.innerHTML = cart.map(item => `
-            <li>
-              <span>${item.name} (x${item.quantity})</span>
-              <span>KES ${(item.priceKES*item.quantity).toLocaleString()}
-                <i class="fas fa-trash-alt" style="color:#c62828;cursor:pointer;margin-left:0.5rem;" data-remove="${item.id}"></i>
-              </span>
-            </li>
           `).join('');
-          const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
-          tot.textContent = `Total: KES ${total.toLocaleString()}`;
-          document.querySelectorAll('.fa-trash-alt[data-remove]').forEach(icon => {
-            icon.addEventListener('click', function() { removeFromCart(parseInt(this.getAttribute('data-remove'))); });
+          document.querySelectorAll('.add-to-cart').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+              e.stopPropagation();
+              addToCart(parseInt(this.getAttribute('data-id')));
+            });
           });
         }
-      }
 
-      // ==================== MODAL LOGIC ====================
-      function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-      function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-
-      document.getElementById('cartIcon').addEventListener('click', ()=>openModal('cartModal'));
-      document.getElementById('closeCartBtn').addEventListener('click', ()=>closeModal('cartModal'));
-      window.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) e.target.style.display='none'; });
-
-      document.getElementById('goToCheckoutBtn').addEventListener('click', () => {
-        if (cart.length === 0) { alert('Your cart is empty!'); return; }
-        closeModal('cartModal');
-        const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
-        document.getElementById('checkoutTotal').textContent = `Total: KES ${total.toLocaleString()}`;
-        document.getElementById('checkoutForm').style.display = 'block';
-        document.getElementById('paymentSuccess').style.display = 'none';
-        document.getElementById('paymentError').style.display = 'none';
-        openModal('checkoutModal');
-      });
-
-      document.getElementById('closeCheckoutBtn').addEventListener('click', () => {
-        closeModal('checkoutModal');
-        openModal('cartModal');
-      });
-
-      // ==================== INTASEND PAYMENT ====================
-      document.getElementById('payNowBtn').addEventListener('click', () => {
-        const name = document.getElementById('custName').value.trim();
-        const email = document.getElementById('custEmail').value.trim();
-        const phone = document.getElementById('custPhone').value.trim();
-
-        if (!name || !email || !phone) {
-          alert('Please fill in all fields (name, email, and phone number).');
-          return;
+        function addToCart(productId) {
+          const existing = cart.find(i => i.id === productId);
+          if (existing) { existing.quantity++; }
+          else { const p = products.find(pp => pp.id === productId); if (p) cart.push({...p, quantity:1}); }
+          const p = products.find(pp => pp.id === productId);
+          blockchain.addBlock(new Block(blockchain.chain.length, new Date().toISOString(), {type:"cart_add",productId,pname:p.name}));
+          updateCartUI();
+          document.getElementById('cartModal').style.display = 'flex';
         }
 
-        const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
-        const hiddenBtn = document.getElementById('intaSendBtn');
+        function removeFromCart(productId) { cart = cart.filter(i => i.id !== productId); updateCartUI(); }
 
-        // Set dynamic attributes
-        hiddenBtn.setAttribute('data-amount', total);
-        hiddenBtn.setAttribute('data-currency', 'KES');
-        hiddenBtn.setAttribute('data-email', email);
-        hiddenBtn.setAttribute('data-phone_number', phone);
-        hiddenBtn.setAttribute('data-name', name);
-        hiddenBtn.setAttribute('data-comment', `ElectroHub order for ${cart.length} items`);
+        function updateCartUI() {
+          const totalItems = cart.reduce((s,i)=>s+i.quantity,0);
+          document.getElementById('cartCount').textContent = totalItems;
+          const list = document.getElementById('cartItemsList');
+          const tot = document.getElementById('cartTotal');
+          if (cart.length === 0) {
+            list.innerHTML = '<li style="justify-content:center;color:#666;">Your cart is empty</li>';
+            tot.textContent = 'Total: KES 0.00';
+          } else {
+            list.innerHTML = cart.map(item => `
+              <li>
+                <span>${item.name} (x${item.quantity})</span>
+                <span>KES ${(item.priceKES*item.quantity).toLocaleString()}
+                  <i class="fas fa-trash-alt" style="color:#c62828;cursor:pointer;margin-left:0.5rem;" data-remove="${item.id}"></i>
+                </span>
+              </li>
+            `).join('');
+            const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
+            tot.textContent = `Total: KES ${total.toLocaleString()}`;
+            document.querySelectorAll('.fa-trash-alt[data-remove]').forEach(icon => {
+              icon.addEventListener('click', function() { removeFromCart(parseInt(this.getAttribute('data-remove'))); });
+            });
+          }
+        }
 
-        // Initialize IntaSend
-        const intaSend = new window.IntaSend({
-          publicAPIKey: 'ISPubKey_test_xxxxxxxxxxxxxxxxxxxx',  // ← REPLACE with your test public key
-          live: false  // change to true for live payments
-        });
+        // ==================== MODAL LOGIC ====================
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        intaSend.on("COMPLETE", (results) => {
-          document.getElementById('checkoutForm').style.display = 'none';
-          document.getElementById('paymentSuccess').style.display = 'block';
-          document.getElementById('paymentError').style.display = 'none';
-          document.getElementById('txnId').textContent = results.id;
-          blockchain.addBlock(new Block(blockchain.chain.length, new Date().toISOString(), {
-            type:"payment", txId: results.id, amount: total, customer: {name, email, phone}
-          }));
-          cart = [];
-          updateCartUI();
-        })
-        .on("FAILED", (results) => {
-          document.getElementById('checkoutForm').style.display = 'none';
+        document.getElementById('cartIcon').addEventListener('click', ()=>openModal('cartModal'));
+        document.getElementById('closeCartBtn').addEventListener('click', ()=>closeModal('cartModal'));
+        window.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) e.target.style.display='none'; });
+
+        document.getElementById('goToCheckoutBtn').addEventListener('click', () => {
+          if (cart.length === 0) { alert('Your cart is empty!'); return; }
+          closeModal('cartModal');
+          const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
+          document.getElementById('checkoutTotal').textContent = `Total: KES ${total.toLocaleString()}`;
+          document.getElementById('checkoutForm').style.display = 'block';
           document.getElementById('paymentSuccess').style.display = 'none';
-          document.getElementById('paymentError').style.display = 'block';
-          document.getElementById('errorMsg').textContent = 'Payment failed: ' + (results.error || 'Unknown error.');
-        })
-        .on("CANCELLED", () => {
-          // Optionally handle cancellation
-          console.log('Payment cancelled');
-          document.getElementById('payNowBtn').disabled = false;
+          document.getElementById('paymentError').style.display = 'none';
+          openModal('checkoutModal');
         });
 
-        // Trigger hidden button click
-        hiddenBtn.click();
-      });
+        document.getElementById('closeCheckoutBtn').addEventListener('click', () => {
+          closeModal('checkoutModal');
+          openModal('cartModal');
+        });
 
-      document.getElementById('continueShoppingBtn').addEventListener('click', () => {
-        closeModal('checkoutModal');
-        renderProducts();
-      });
-      document.getElementById('retryPaymentBtn').addEventListener('click', () => {
-        document.getElementById('checkoutForm').style.display = 'block';
-        document.getElementById('paymentError').style.display = 'none';
-      });
+        // ==================== INTASEND PAYMENT (FIXED) ====================
+        document.getElementById('payNowBtn').addEventListener('click', () => {
+          const name = document.getElementById('custName').value.trim();
+          const email = document.getElementById('custEmail').value.trim();
+          const phone = document.getElementById('custPhone').value.trim();
 
-      // ==================== BLOCKCHAIN MODAL ====================
-      document.getElementById('blockchainIcon').addEventListener('click', () => {
-        document.getElementById('blockchainContent').innerHTML = blockchain.getChainHTML();
-        openModal('blockchainModal');
-      });
-      document.getElementById('closeBlockchainBtn').addEventListener('click', ()=>closeModal('blockchainModal'));
-      document.getElementById('validateChainBtn').addEventListener('click', () => {
-        alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌'));
-      });
+          if (!name || !email || !phone) {
+            alert('Please fill in all fields (name, email, and phone number).');
+            return;
+          }
 
-      // ==================== SEARCH ====================
-      document.getElementById('searchBtn').addEventListener('click', ()=>{ searchTerm=document.getElementById('searchInput').value.trim(); renderProducts(); });
-      document.getElementById('searchInput').addEventListener('keypress', e => { if(e.key==='Enter'){ searchTerm=e.target.value.trim(); renderProducts(); } });
+          const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
+          const hiddenBtn = document.getElementById('intaSendBtn');
 
-      // ==================== CHAT ====================
-      const chatToggle = document.getElementById('chatToggle');
-      const chatWindow = document.getElementById('chatWindow');
-      const chatMessages = document.getElementById('chatMessages');
-      chatToggle.addEventListener('click', ()=>{ chatWindow.style.display = chatWindow.style.display==='flex'?'none':'flex'; });
-      document.getElementById('sendChatBtn').addEventListener('click', ()=>{
-        const msg = document.getElementById('chatInput').value.trim();
-        if(!msg) return;
-        chatMessages.innerHTML += `<p><strong>You:</strong> ${msg}</p>`;
-        document.getElementById('chatInput').value = '';
-        setTimeout(()=>{ chatMessages.innerHTML += `<p><strong>AGI:</strong> ${processAGI(msg)}</p>`; chatMessages.scrollTop=chatMessages.scrollHeight; }, 500);
-      });
+          // Set data attributes on hidden button
+          hiddenBtn.setAttribute('data-amount', total);
+          hiddenBtn.setAttribute('data-currency', 'KES');
+          hiddenBtn.setAttribute('data-email', email);
+          hiddenBtn.setAttribute('data-phone_number', phone);
+          hiddenBtn.setAttribute('data-name', name);
+          hiddenBtn.setAttribute('data-comment', `ElectroHub order for ${cart.length} items`);
 
-      loadProducts();
+          // Reinitialise event listeners (required after attribute update)
+          if (window.IntaSend && window.IntaSend.init) {
+            window.IntaSend.init({
+              publicAPIKey: 'ISPubKey_test_xxxxxxxxxxxxxxxxxxxx',  // ← Replace
+              live: false
+            });
+          }
+
+          // Setup callbacks
+          if (window.IntaSend && window.IntaSend.on) {
+            window.IntaSend.on("COMPLETE", (results) => {
+              document.getElementById('checkoutForm').style.display = 'none';
+              document.getElementById('paymentSuccess').style.display = 'block';
+              document.getElementById('paymentError').style.display = 'none';
+              document.getElementById('txnId').textContent = results.id;
+              blockchain.addBlock(new Block(blockchain.chain.length, new Date().toISOString(), {
+                type:"payment", txId: results.id, amount: total, customer: {name, email, phone}
+              }));
+              cart = [];
+              updateCartUI();
+            })
+            .on("FAILED", (results) => {
+              document.getElementById('checkoutForm').style.display = 'none';
+              document.getElementById('paymentSuccess').style.display = 'none';
+              document.getElementById('paymentError').style.display = 'block';
+              document.getElementById('errorMsg').textContent = 'Payment failed: ' + (results.error || 'Unknown error.');
+            })
+            .on("CANCELLED", () => {
+              console.log('Payment cancelled');
+              document.getElementById('payNowBtn').disabled = false;
+            });
+          }
+
+          // Simulate click on hidden button to trigger payment pop-up
+          hiddenBtn.click();
+        });
+
+        document.getElementById('continueShoppingBtn').addEventListener('click', () => {
+          closeModal('checkoutModal');
+          renderProducts();
+        });
+        document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+          document.getElementById('checkoutForm').style.display = 'block';
+          document.getElementById('paymentError').style.display = 'none';
+        });
+
+        // ==================== BLOCKCHAIN MODAL ====================
+        document.getElementById('blockchainIcon').addEventListener('click', () => {
+          document.getElementById('blockchainContent').innerHTML = blockchain.getChainHTML();
+          openModal('blockchainModal');
+        });
+        document.getElementById('closeBlockchainBtn').addEventListener('click', ()=>closeModal('blockchainModal'));
+        document.getElementById('validateChainBtn').addEventListener('click', () => {
+          alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌'));
+        });
+
+        // ==================== SEARCH ====================
+        document.getElementById('searchBtn').addEventListener('click', ()=>{ searchTerm=document.getElementById('searchInput').value.trim(); renderProducts(); });
+        document.getElementById('searchInput').addEventListener('keypress', e => { if(e.key==='Enter'){ searchTerm=e.target.value.trim(); renderProducts(); } });
+
+        // ==================== CHAT ====================
+        const chatToggle = document.getElementById('chatToggle');
+        const chatWindow = document.getElementById('chatWindow');
+        const chatMessages = document.getElementById('chatMessages');
+        chatToggle.addEventListener('click', ()=>{ chatWindow.style.display = chatWindow.style.display==='flex'?'none':'flex'; });
+        document.getElementById('sendChatBtn').addEventListener('click', ()=>{
+          const msg = document.getElementById('chatInput').value.trim();
+          if(!msg) return;
+          chatMessages.innerHTML += `<p><strong>You:</strong> ${msg}</p>`;
+          document.getElementById('chatInput').value = '';
+          setTimeout(()=>{ chatMessages.innerHTML += `<p><strong>AGI:</strong> ${processAGI(msg)}</p>`; chatMessages.scrollTop=chatMessages.scrollHeight; }, 500);
+        });
+
+        // Kick off product loading
+        loadProducts();
+
+      }); // end DOMContentLoaded
     })();
   </script>
 </body>
