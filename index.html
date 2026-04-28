@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
   <title>ElectroHub • Buy & Sell Electronics</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
-  <!-- IntaSend Inline SDK -->
-  <script src="https://unpkg.com/intasend-inlinejs-sdk@4.0.7/build/intasend-inline.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -68,19 +66,9 @@
     .cart-items { list-style: none; max-height: 200px; overflow-y: auto; margin-bottom: 1rem; }
     .cart-items li { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #ddd; }
     .cart-total { font-weight: 700; margin-bottom: 1rem; text-align: right; font-size: 1.1rem; }
-    .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; font-weight: 600; margin-bottom: 0.3rem; color: #1b5e20; }
-    .form-group input { width: 100%; padding: 0.7rem; border: 2px solid #c8e6c9; border-radius: 8px; font-size: 1rem; outline: none; transition: border 0.2s; }
-    .form-group input:focus { border-color: #2e7d32; }
-    .form-group small { color: #666; font-size: 0.75rem; }
-    .pay-btn { background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; border: none; padding: 0.8rem 2rem; border-radius: 30px; font-weight: 700; font-size: 1rem; cursor: pointer; width: 100%; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-    .pay-btn:hover { background: linear-gradient(135deg, #1b5e20, #0d4010); transform: scale(1.02); }
-    .pay-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .payment-methods { display: flex; gap: 1rem; justify-content: center; margin: 0.8rem 0; font-size: 2rem; color: #2e7d32; }
     footer { background: #a5d6a7; text-align: center; padding: 1rem; margin-top: auto; color: #000; font-size: 0.9rem; border-top: 1px solid #81c784; }
     footer a { color: #1b5e20; font-weight: 700; }
-    .success-message { text-align: center; padding: 2rem; }
-    .success-message i { font-size: 4rem; color: #2e7d32; }
+    .blockchain-badge { background: #1b5e20; color: white; padding: 0.15rem 0.6rem; border-radius: 12px; font-size: 0.7rem; margin-left: 0.5rem; }
     .chat-icon { position: fixed; bottom: 20px; right: 20px; background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,0.25); z-index: 999; }
     .chat-window { position: fixed; bottom: 85px; right: 20px; width: 320px; max-height: 400px; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); display: none; flex-direction: column; z-index: 1000; overflow: hidden; }
     .chat-header { background: #2e7d32; color: white; padding: 0.7rem 1rem; font-weight: 700; }
@@ -99,16 +87,14 @@
   </style>
 </head>
 <body>
-  <!-- Hidden IntaSend trigger button (mandatory class) -->
-  <button id="intaSendBtn" class="intaSendPayButton" style="display:none;">Pay</button>
-
   <header class="top-bar">
-    <div class="logo"><i class="fas fa-bolt"></i> ElectroHub</div>
+    <div class="logo"><i class="fas fa-bolt"></i> ElectroHub <span class="blockchain-badge">BLOCKCHAIN</span></div>
     <div class="search-section">
       <input type="text" placeholder="Search phones, laptops, gadgets..." id="searchInput" />
       <button id="searchBtn"><i class="fas fa-search"></i> Search</button>
     </div>
     <div class="nav-icons">
+      <i class="fas fa-link" id="blockchainIcon" title="Blockchain Ledger"></i>
       <i class="far fa-user" title="Account"></i>
       <i class="far fa-heart" title="Wishlist"></i>
       <span style="position: relative; display: flex; align-items: center;">
@@ -138,64 +124,25 @@
       <ul class="cart-items" id="cartItemsList"></ul>
       <div class="cart-total" id="cartTotal">Total: KES 0.00</div>
       <button class="close-btn" id="closeCartBtn">Close</button>
-      <button class="pay-btn" id="goToCheckoutBtn" style="margin-top:0.5rem;">
-        <i class="fas fa-lock"></i> Proceed to Checkout
-      </button>
     </div>
   </div>
 
-  <!-- Checkout Modal -->
-  <div class="modal-overlay" id="checkoutModal">
+  <!-- Blockchain Ledger Modal -->
+  <div class="modal-overlay" id="blockchainModal">
     <div class="modal-box">
-      <h2><i class="fas fa-lock"></i> Secure Checkout</h2>
-      <div id="checkoutForm">
-        <div class="form-group">
-          <label>Full Name *</label>
-          <input type="text" id="custName" placeholder="e.g. John Doe" required />
-        </div>
-        <div class="form-group">
-          <label>Email Address *</label>
-          <input type="email" id="custEmail" placeholder="e.g. john@example.com" required />
-          <small>Your receipt will be sent here</small>
-        </div>
-        <div class="form-group">
-          <label>Phone Number *</label>
-          <input type="tel" id="custPhone" placeholder="e.g. 0712345678" required />
-          <small>For M-Pesa payment prompt</small>
-        </div>
-        <div class="cart-total" id="checkoutTotal">Total: KES 0.00</div>
-        <div class="payment-methods">
-          <i class="fab fa-cc-visa" title="Visa"></i>
-          <i class="fab fa-cc-mastercard" title="Mastercard"></i>
-          <i class="fas fa-mobile-alt" title="M-Pesa"></i>
-        </div>
-        <button class="pay-btn" id="payNowBtn">
-          <i class="fas fa-credit-card"></i> Pay with IntaSend
-        </button>
-        <button class="close-btn" id="closeCheckoutBtn" style="margin-top:0.5rem; width:100%;">Back to Cart</button>
-      </div>
-      <div id="paymentSuccess" class="success-message" style="display:none;">
-        <i class="fas fa-check-circle"></i>
-        <h2>Payment Successful!</h2>
-        <p>Thank you for your purchase. A receipt has been sent to your email.</p>
-        <p><strong>Transaction ID:</strong> <span id="txnId"></span></p>
-        <button class="pay-btn" id="continueShoppingBtn" style="margin-top:1rem;">Continue Shopping</button>
-      </div>
-      <div id="paymentError" class="success-message" style="display:none;">
-        <i class="fas fa-times-circle" style="color:#c62828;"></i>
-        <h2>Payment Failed</h2>
-        <p id="errorMsg">Something went wrong. Please try again.</p>
-        <button class="pay-btn" id="retryPaymentBtn" style="margin-top:1rem;">Try Again</button>
-      </div>
+      <h2><i class="fas fa-link"></i> Blockchain Ledger</h2>
+      <div id="blockchainContent" style="max-height:300px; overflow-y:auto; font-family:monospace; font-size:0.8rem; background:#f5f5f5; padding:0.5rem; margin:0.5rem 0;"></div>
+      <button class="close-btn" id="closeBlockchainBtn">Close</button>
+      <button id="validateChainBtn" style="background:#1b5e20; color:white; border:none; padding:0.4rem 1rem; border-radius:20px; margin-left:0.5rem;">Validate Chain</button>
     </div>
   </div>
 
   <!-- Chat -->
   <div class="chat-icon" id="chatToggle"><i class="fas fa-robot"></i></div>
   <div class="chat-window" id="chatWindow">
-    <div class="chat-header">ElectroHub AGI Assistant</div>
+    <div class="chat-header">DeepSeek AI Assistant</div>
     <div class="chat-messages" id="chatMessages">
-      <p><strong>AGI:</strong> Hello! Ask me about products or recommendations.</p>
+      <p><strong>AI:</strong> Hello! Ask me anything about our electronics.</p>
     </div>
     <div class="chat-input-area">
       <input type="text" id="chatInput" placeholder="Type your message..." />
@@ -209,23 +156,102 @@
 
   <script>
     (function() {
+      // ==================== SIMPLE BLOCKCHAIN (record keeping, no mining) ====================
+      class Block {
+        constructor(index, timestamp, data, previousHash = '') {
+          this.index = index;
+          this.timestamp = timestamp;
+          this.data = data;
+          this.previousHash = previousHash;
+          this.hash = ''; // will be set asynchronously
+        }
+      }
+
+      class Blockchain {
+        constructor() {
+          this.chain = [];
+          this.ready = this.init();
+        }
+
+        async init() {
+          // Try to load from localStorage
+          const saved = localStorage.getItem('electrohub_chain');
+          if (saved) {
+            try {
+              this.chain = JSON.parse(saved);
+              return;
+            } catch (e) {}
+          }
+          // Genesis block
+          const genesis = new Block(0, new Date().toISOString(), { type: 'genesis' }, '0');
+          genesis.hash = await this.computeHash(genesis);
+          this.chain = [genesis];
+          this.save();
+        }
+
+        async computeHash(block) {
+          const data = block.index + block.previousHash + block.timestamp + JSON.stringify(block.data);
+          const encoder = new TextEncoder();
+          const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async addBlock(data) {
+          await this.ready;
+          const latest = this.chain[this.chain.length - 1];
+          const newBlock = new Block(this.chain.length, new Date().toISOString(), data, latest.hash);
+          newBlock.hash = await this.computeHash(newBlock);
+          this.chain.push(newBlock);
+          this.save();
+        }
+
+        isChainValid() {
+          for (let i = 1; i < this.chain.length; i++) {
+            const curr = this.chain[i];
+            const prev = this.chain[i - 1];
+            // We cannot recompute hash synchronously, but we can verify previous hash linkage
+            if (curr.previousHash !== prev.hash) return false;
+          }
+          return true;
+        }
+
+        save() {
+          localStorage.setItem('electrohub_chain', JSON.stringify(this.chain));
+        }
+
+        getChainHTML() {
+          if (!this.chain.length) return '<p>No blocks yet.</p>';
+          return this.chain.map(b => `
+            <div style="border-bottom:1px solid #ccc; padding:0.3rem 0;">
+              <strong>Block #${b.index}</strong> <span style="color:#1b5e20;">${b.hash.substring(0,10)}...</span><br>
+              <small>Prev: ${b.previousHash.substring(0,10)}... | Time: ${new Date(b.timestamp).toLocaleString()}</small><br>
+              <small>Data: ${JSON.stringify(b.data)}</small>
+            </div>
+          `).join('');
+        }
+      }
+
+      const blockchain = new Blockchain();
+
+      // ==================== GLOBAL VARIABLES ====================
       let products = [];
       let cart = [];
       let currentCategory = 'all';
       let searchTerm = '';
 
-      // ---------- Load products ----------
+      // ==================== PRODUCT LOADING ====================
       async function loadProducts() {
         try {
           const res = await fetch('products.json');
-          if (!res.ok) throw new Error('Failed to load');
+          if (!res.ok) throw new Error('Failed to load products.json');
           products = await res.json();
           populateCategories();
           renderProducts();
           updateCartUI();
           document.querySelector('.sidebar li[data-category="all"]').style.fontWeight = 'bold';
-        } catch(e) {
-          document.getElementById('productGrid').innerHTML = '<p style="color:red;">Error loading products.</p>';
+        } catch (e) {
+          document.getElementById('productGrid').innerHTML = '<p style="color:red;">Error loading products. Please ensure products.json exists.</p>';
         }
       }
 
@@ -277,18 +303,29 @@
         });
       }
 
-      function addToCart(productId) {
+      async function addToCart(productId) {
         const existing = cart.find(i => i.id === productId);
-        if (existing) existing.quantity++;
-        else { const p = products.find(pp => pp.id === productId); if (p) cart.push({...p, quantity:1}); }
+        if (existing) {
+          existing.quantity++;
+        } else {
+          const p = products.find(pp => pp.id === productId);
+          if (p) cart.push({...p, quantity: 1});
+        }
         updateCartUI();
         openModal('cartModal');
+
+        // Record on blockchain (no freeze)
+        const p = products.find(pp => pp.id === productId);
+        await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name, quantity: existing ? existing.quantity : 1 });
       }
 
-      function removeFromCart(productId) { cart = cart.filter(i => i.id !== productId); updateCartUI(); }
+      function removeFromCart(productId) {
+        cart = cart.filter(i => i.id !== productId);
+        updateCartUI();
+      }
 
       function updateCartUI() {
-        const totalItems = cart.reduce((s,i)=>s+i.quantity,0);
+        const totalItems = cart.reduce((s,i) => s + i.quantity, 0);
         document.getElementById('cartCount').textContent = totalItems;
         const list = document.getElementById('cartItemsList');
         const tot = document.getElementById('cartTotal');
@@ -299,12 +336,12 @@
           list.innerHTML = cart.map(item => `
             <li>
               <span>${item.name} (x${item.quantity})</span>
-              <span>KES ${(item.priceKES*item.quantity).toLocaleString()}
+              <span>KES ${(item.priceKES * item.quantity).toLocaleString()}
                 <i class="fas fa-trash-alt" style="color:#c62828;cursor:pointer;margin-left:0.5rem;" data-remove="${item.id}"></i>
               </span>
             </li>
           `).join('');
-          const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
+          const total = cart.reduce((s,i) => s + (i.priceKES * i.quantity), 0);
           tot.textContent = `Total: KES ${total.toLocaleString()}`;
           document.querySelectorAll('.fa-trash-alt[data-remove]').forEach(icon => {
             icon.addEventListener('click', function() { removeFromCart(parseInt(this.getAttribute('data-remove'))); });
@@ -312,136 +349,72 @@
         }
       }
 
-      // ---------- Modals ----------
+      // ==================== MODALS ====================
       function openModal(id) { document.getElementById(id).style.display = 'flex'; }
       function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-      document.getElementById('cartIcon').addEventListener('click', ()=>openModal('cartModal'));
-      document.getElementById('closeCartBtn').addEventListener('click', ()=>closeModal('cartModal'));
-      window.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) e.target.style.display='none'; });
+      document.getElementById('cartIcon').addEventListener('click', () => openModal('cartModal'));
+      document.getElementById('closeCartBtn').addEventListener('click', () => closeModal('cartModal'));
+      window.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) e.target.style.display = 'none'; });
 
-      document.getElementById('goToCheckoutBtn').addEventListener('click', () => {
-        if (cart.length === 0) { alert('Your cart is empty!'); return; }
-        closeModal('cartModal');
-        const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
-        document.getElementById('checkoutTotal').textContent = `Total: KES ${total.toLocaleString()}`;
-        document.getElementById('checkoutForm').style.display = 'block';
-        document.getElementById('paymentSuccess').style.display = 'none';
-        document.getElementById('paymentError').style.display = 'none';
-        openModal('checkoutModal');
+      // Blockchain modal
+      document.getElementById('blockchainIcon').addEventListener('click', async () => {
+        await blockchain.ready;
+        document.getElementById('blockchainContent').innerHTML = blockchain.getChainHTML();
+        openModal('blockchainModal');
+      });
+      document.getElementById('closeBlockchainBtn').addEventListener('click', () => closeModal('blockchainModal'));
+      document.getElementById('validateChainBtn').addEventListener('click', () => {
+        alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌'));
       });
 
-      document.getElementById('closeCheckoutBtn').addEventListener('click', () => {
-        closeModal('checkoutModal');
-        openModal('cartModal');
-      });
+      // ==================== SEARCH ====================
+      document.getElementById('searchBtn').addEventListener('click', () => { searchTerm = document.getElementById('searchInput').value.trim(); renderProducts(); });
+      document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') { searchTerm = e.target.value.trim(); renderProducts(); } });
 
-      // ---------- IntaSend Payment ----------
-      const intaSendPublicKey = 'ISPubKey_test_xxxxxxxxxxxxxxxxxxxx'; // ← Replace with your test key
-
-      document.getElementById('payNowBtn').addEventListener('click', () => {
-        const name = document.getElementById('custName').value.trim();
-        const email = document.getElementById('custEmail').value.trim();
-        const phone = document.getElementById('custPhone').value.trim();
-
-        if (!name || !email || !phone) {
-          alert('Please fill in all fields.');
-          return;
-        }
-
-        const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
-        const hiddenBtn = document.getElementById('intaSendBtn');
-
-        // Set dynamic attributes
-        hiddenBtn.setAttribute('data-amount', total);
-        hiddenBtn.setAttribute('data-currency', 'KES');
-        hiddenBtn.setAttribute('data-email', email);
-        hiddenBtn.setAttribute('data-phone_number', phone);
-        hiddenBtn.setAttribute('data-name', name);
-        hiddenBtn.setAttribute('data-comment', `ElectroHub order for ${cart.length} items`);
-
-        // Initialize IntaSend SDK (safe to call again)
-        if (window.IntaSend && window.IntaSend.init) {
-          window.IntaSend.init({
-            publicAPIKey: intaSendPublicKey,
-            live: false  // true for production
-          });
-        }
-
-        // Setup callbacks
-        if (window.IntaSend && window.IntaSend.on) {
-          window.IntaSend.on("COMPLETE", (results) => {
-            document.getElementById('checkoutForm').style.display = 'none';
-            document.getElementById('paymentSuccess').style.display = 'block';
-            document.getElementById('paymentError').style.display = 'none';
-            document.getElementById('txnId').textContent = results.id;
-            // Optionally record in localStorage or send to server
-            cart = [];
-            updateCartUI();
-          })
-          .on("FAILED", (results) => {
-            document.getElementById('checkoutForm').style.display = 'none';
-            document.getElementById('paymentSuccess').style.display = 'none';
-            document.getElementById('paymentError').style.display = 'block';
-            document.getElementById('errorMsg').textContent = 'Payment failed: ' + (results.error || 'Unknown error.');
-          })
-          .on("CANCELLED", () => {
-            document.getElementById('payNowBtn').disabled = false;
-          });
-        }
-
-        hiddenBtn.click();
-      });
-
-      document.getElementById('continueShoppingBtn').addEventListener('click', () => {
-        closeModal('checkoutModal');
-        renderProducts();
-      });
-      document.getElementById('retryPaymentBtn').addEventListener('click', () => {
-        document.getElementById('checkoutForm').style.display = 'block';
-        document.getElementById('paymentError').style.display = 'none';
-      });
-
-      // ---------- Search ----------
-      document.getElementById('searchBtn').addEventListener('click', ()=>{ searchTerm=document.getElementById('searchInput').value.trim(); renderProducts(); });
-      document.getElementById('searchInput').addEventListener('keypress', e => { if(e.key==='Enter'){ searchTerm=e.target.value.trim(); renderProducts(); } });
-
-      // ---------- Chat ----------
+      // ==================== DEEPSEEK CHAT ====================
       const chatToggle = document.getElementById('chatToggle');
       const chatWindow = document.getElementById('chatWindow');
       const chatMessages = document.getElementById('chatMessages');
       const chatInput = document.getElementById('chatInput');
       const sendChatBtn = document.getElementById('sendChatBtn');
 
-      chatToggle.addEventListener('click', ()=>{ chatWindow.style.display = chatWindow.style.display==='flex'?'none':'flex'; });
+      chatToggle.addEventListener('click', () => { chatWindow.style.display = chatWindow.style.display === 'flex' ? 'none' : 'flex'; });
 
-      function getAGIReply(msg) {
-        const m = msg.toLowerCase().trim();
-        if (m.includes('hello')||m.includes('hi')) return "Hello! How can I help you with electronics today?";
-        if (m.includes('recommend')) {
-          if (products.length > 0) {
-            const r = products[Math.floor(Math.random()*products.length)];
-            return `I recommend: ${r.name} at KES ${r.priceKES.toLocaleString()}.`;
-          }
-          return "No products loaded yet.";
-        }
-        const found = products.find(p => m.includes(p.name.toLowerCase()));
-        if (found) return `${found.name} costs KES ${found.priceKES.toLocaleString()}. Category: ${found.category}.`;
-        return "I'm still learning. Ask me about a product, or say 'recommend' to get a suggestion.";
-      }
-
-      sendChatBtn.addEventListener('click', ()=>{
-        const userMsg = chatInput.value.trim();
-        if(!userMsg) return;
+      async function sendToDeepSeek(userMsg) {
+        // Add user message
         chatMessages.innerHTML += `<p><strong>You:</strong> ${userMsg}</p>`;
         chatInput.value = '';
-        setTimeout(()=>{
-          chatMessages.innerHTML += `<p><strong>AGI:</strong> ${getAGIReply(userMsg)}</p>`;
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-        }, 300);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Show typing indicator
+        const typingId = 'typing-' + Date.now();
+        chatMessages.innerHTML += `<p id="${typingId}"><em>AI is thinking...</em></p>`;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        try {
+          const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: userMsg, products })
+          });
+          const data = await response.json();
+          document.getElementById(typingId).remove();
+          chatMessages.innerHTML += `<p><strong>AI:</strong> ${data.reply || 'Sorry, no reply.'}</p>`;
+        } catch (err) {
+          document.getElementById(typingId).remove();
+          chatMessages.innerHTML += `<p><strong>AI:</strong> Sorry, the assistant is unavailable right now.</p>`;
+        }
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      sendChatBtn.addEventListener('click', () => {
+        const msg = chatInput.value.trim();
+        if (!msg) return;
+        sendToDeepSeek(msg);
       });
 
-      chatInput.addEventListener('keypress', e => { if(e.key==='Enter') sendChatBtn.click(); });
+      chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendChatBtn.click(); });
 
       // Start everything
       loadProducts();
