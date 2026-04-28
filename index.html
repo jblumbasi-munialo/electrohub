@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
   <title>ElectroHub • Buy & Sell Electronics</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
-  <!-- Flutterwave Inline -->
-  <script src="https://checkout.flutterwave.com/v3.js"></script>
+  <!-- IntaSend Inline SDK -->
+  <script src="https://unpkg.com/intasend-inlinejs-sdk@4.0.7/build/intasend-inline.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -68,7 +68,6 @@
     .cart-items { list-style: none; max-height: 200px; overflow-y: auto; margin-bottom: 1rem; }
     .cart-items li { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #ddd; }
     .cart-total { font-weight: 700; margin-bottom: 1rem; text-align: right; font-size: 1.1rem; }
-    /* Checkout form */
     .form-group { margin-bottom: 1rem; }
     .form-group label { display: block; font-weight: 600; margin-bottom: 0.3rem; color: #1b5e20; }
     .form-group input { width: 100%; padding: 0.7rem; border: 2px solid #c8e6c9; border-radius: 8px; font-size: 1rem; outline: none; transition: border 0.2s; }
@@ -101,6 +100,9 @@
   </style>
 </head>
 <body>
+  <!-- Hidden IntaSend trigger button -->
+  <button id="intaSendBtn" data-amount="100" data-currency="KES" style="display:none;">Pay with IntaSend</button>
+
   <header class="top-bar">
     <div class="logo"><i class="fas fa-bolt"></i> ElectroHub <span class="blockchain-badge">BLOCKCHAIN</span></div>
     <div class="search-section">
@@ -169,7 +171,7 @@
           <i class="fas fa-mobile-alt" title="M-Pesa"></i>
         </div>
         <button class="pay-btn" id="payNowBtn">
-          <i class="fas fa-credit-card"></i> Pay with Flutterwave
+          <i class="fas fa-credit-card"></i> Pay with IntaSend
         </button>
         <button class="close-btn" id="closeCheckoutBtn" style="margin-top:0.5rem; width:100%;">Back to Cart</button>
       </div>
@@ -245,7 +247,7 @@
       const blockchain = new Blockchain();
       blockchain.loadChain();
 
-      // ==================== AGI ====================
+      // ==================== SIMPLE AGI (offline) ====================
       function processAGI(message) {
         const msg = message.toLowerCase().trim();
         if (msg.includes('hello')||msg.includes('hi')) return "Hello! I'm ElectroHub AGI. Ask me about products or our blockchain.";
@@ -287,7 +289,6 @@
         });
       }
 
-      // ==================== RENDER PRODUCTS ====================
       function renderProducts() {
         const filtered = products.filter(p => {
           const mc = currentCategory === 'all' || p.category === currentCategory;
@@ -321,7 +322,6 @@
         });
       }
 
-      // ==================== CART ====================
       function addToCart(productId) {
         const existing = cart.find(i => i.id === productId);
         if (existing) { existing.quantity++; }
@@ -383,7 +383,7 @@
         openModal('cartModal');
       });
 
-      // ==================== FLUTTERWAVE PAYMENT ====================
+      // ==================== INTASEND PAYMENT ====================
       document.getElementById('payNowBtn').addEventListener('click', () => {
         const name = document.getElementById('custName').value.trim();
         const email = document.getElementById('custEmail').value.trim();
@@ -393,89 +393,50 @@
           alert('Please fill in all fields (name, email, and phone number).');
           return;
         }
-        if (!/^\d{10,12}$/.test(phone.replace(/^0/,''))) {
-          alert('Please enter a valid Kenyan phone number (e.g. 0712345678).');
-          return;
-        }
 
         const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
-        const txRef = 'EH-' + Date.now() + '-' + Math.floor(Math.random()*10000);
-        const btn = document.getElementById('payNowBtn');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        const hiddenBtn = document.getElementById('intaSendBtn');
 
-        FlutterwaveCheckout({
-          public_key: 'FLWPUBK_TEST-xxxxxxxxxxxxxxx-X',   // ← REPLACE WITH YOUR PUBLIC KEY
-          tx_ref: txRef,
-          amount: total,
-          currency: 'KES',
-          payment_options: 'card, mpesa',
-          redirect_url: window.location.href,
-          customer: {
-            email: email,
-            phone_number: phone,
-            name: name
-          },
-          customizations: {
-            title: 'ElectroHub',
-            description: `Payment for ${cart.length} item(s)`,
-            logo: 'https://cdn-icons-png.flaticon.com/512/3081/3081648.png'
-          },
-          callback: function(data) {
-            // Payment completed — verify on backend
-            const ref = data.tx_ref || txRef;
-            const txnId = data.transaction_id || 0;
-            verifyPaymentOnBackend(ref, txnId, total);
-          },
-          onclose: function() {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-credit-card"></i> Pay with Flutterwave';
-          }
+        // Set dynamic attributes
+        hiddenBtn.setAttribute('data-amount', total);
+        hiddenBtn.setAttribute('data-currency', 'KES');
+        hiddenBtn.setAttribute('data-email', email);
+        hiddenBtn.setAttribute('data-phone_number', phone);
+        hiddenBtn.setAttribute('data-name', name);
+        hiddenBtn.setAttribute('data-comment', `ElectroHub order for ${cart.length} items`);
+
+        // Initialize IntaSend
+        const intaSend = new window.IntaSend({
+          publicAPIKey: 'ISPubKey_test_xxxxxxxxxxxxxxxxxxxx',  // ← REPLACE with your test public key
+          live: false  // change to true for live payments
         });
-      });
 
-      async function verifyPaymentOnBackend(txRef, transactionId, amount) {
-        try {
-          const resp = await fetch('/api/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tx_ref: txRef, transaction_id: transactionId, amount: amount })
-          });
-          const result = await resp.json();
-
-          document.getElementById('checkoutForm').style.display = 'none';
-          if (result.status === 'success') {
-            document.getElementById('paymentSuccess').style.display = 'block';
-            document.getElementById('paymentError').style.display = 'none';
-            document.getElementById('txnId').textContent = transactionId;
-            // Record on blockchain
-            blockchain.addBlock(new Block(blockchain.chain.length, new Date().toISOString(), {
-              type:"payment", txRef, transactionId, amount, customer: {
-                name: document.getElementById('custName').value,
-                email: document.getElementById('custEmail').value,
-                phone: document.getElementById('custPhone').value
-              }
-            }));
-            cart = [];
-            updateCartUI();
-          } else {
-            document.getElementById('paymentSuccess').style.display = 'none';
-            document.getElementById('paymentError').style.display = 'block';
-            document.getElementById('errorMsg').textContent = result.message || 'Payment verification failed.';
-          }
-        } catch(e) {
-          // If backend is unreachable, trust the callback (demo mode)
+        intaSend.on("COMPLETE", (results) => {
           document.getElementById('checkoutForm').style.display = 'none';
           document.getElementById('paymentSuccess').style.display = 'block';
           document.getElementById('paymentError').style.display = 'none';
-          document.getElementById('txnId').textContent = transactionId;
+          document.getElementById('txnId').textContent = results.id;
           blockchain.addBlock(new Block(blockchain.chain.length, new Date().toISOString(), {
-            type:"payment_verified_client_side", txRef, transactionId, amount
+            type:"payment", txId: results.id, amount: total, customer: {name, email, phone}
           }));
           cart = [];
           updateCartUI();
-        }
-      }
+        })
+        .on("FAILED", (results) => {
+          document.getElementById('checkoutForm').style.display = 'none';
+          document.getElementById('paymentSuccess').style.display = 'none';
+          document.getElementById('paymentError').style.display = 'block';
+          document.getElementById('errorMsg').textContent = 'Payment failed: ' + (results.error || 'Unknown error.');
+        })
+        .on("CANCELLED", () => {
+          // Optionally handle cancellation
+          console.log('Payment cancelled');
+          document.getElementById('payNowBtn').disabled = false;
+        });
+
+        // Trigger hidden button click
+        hiddenBtn.click();
+      });
 
       document.getElementById('continueShoppingBtn').addEventListener('click', () => {
         closeModal('checkoutModal');
@@ -484,8 +445,6 @@
       document.getElementById('retryPaymentBtn').addEventListener('click', () => {
         document.getElementById('checkoutForm').style.display = 'block';
         document.getElementById('paymentError').style.display = 'none';
-        document.getElementById('payNowBtn').disabled = false;
-        document.getElementById('payNowBtn').innerHTML = '<i class="fas fa-credit-card"></i> Pay with Flutterwave';
       });
 
       // ==================== BLOCKCHAIN MODAL ====================
