@@ -24,7 +24,7 @@ Keep responses friendly, concise, and use Kenyan Shillings (KES).`;
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'deepseek-chat',   // valid for V3
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
@@ -35,11 +35,23 @@ Keep responses friendly, concise, and use Kenyan Shillings (KES).`;
     });
 
     const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || "I couldn't process that request.";
+
+    // Log the full response (visible in Vercel Function Logs)
+    console.log('DeepSeek API response:', JSON.stringify(data, null, 2));
+
+    // If the API returned an error message, pass it through
+    if (data.error) {
+      return res.status(200).json({ reply: `API error: ${data.error.message || JSON.stringify(data.error)}` });
+    }
+
+    const reply = data.choices?.[0]?.message?.content;
+    if (!reply) {
+      return res.status(200).json({ reply: `Unexpected response. See console. Data: ${JSON.stringify(data).substring(0, 200)}` });
+    }
 
     return res.status(200).json({ reply });
   } catch (error) {
-    console.error('DeepSeek API error:', error);
+    console.error('DeepSeek API call failed:', error);
     return res.status(500).json({ reply: 'The assistant is temporarily unavailable.' });
   }
 }
