@@ -24,7 +24,7 @@ Keep responses friendly, concise, and use Kenyan Shillings (KES).`;
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'llama3-8b-8192',   // free, fast, capable
+        model: 'llama-3.1-8b-instant',   // ← Updated model name
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
