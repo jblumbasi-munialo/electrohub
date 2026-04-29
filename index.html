@@ -46,10 +46,10 @@
     .sidebar li:hover { background: #b9dfc2; }
     .main-content { flex: 1; min-width: 300px; }
     .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #1b5e20; display: flex; align-items: center; gap: 0.5rem; }
-    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.5rem; }
+    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.5rem; }
     .product-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 6px 18px rgba(0,0,0,0.06); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; border: 1px solid #b9dfc2; }
     .product-card:hover { transform: translateY(-6px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
-    .product-img { width: 100%; height: 180px; background: #eef7ea; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+    .product-img { width: 100%; height: 190px; background: #eef7ea; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
     .product-img img { width: 100%; height: 100%; object-fit: cover; }
     .product-img i.fallback-icon { font-size: 3.5rem; color: #558b2f; opacity: 0.5; position: absolute; }
     .product-info { padding: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; color: #000; }
@@ -58,6 +58,7 @@
     .product-meta { font-size: 0.8rem; color: #333; display: flex; justify-content: space-between; }
     .add-to-cart { margin-top: 0.3rem; background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; border: none; padding: 0.6rem; border-radius: 24px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.3rem; letter-spacing: 0.3px; }
     .add-to-cart:hover { background: linear-gradient(135deg, #1b5e20, #0d4010); transform: scale(1.02); }
+
     /* Modals */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
     .modal-box { background: white; border-radius: 16px; padding: 1.5rem; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); color: #000; max-height: 90vh; overflow-y: auto; }
@@ -66,8 +67,43 @@
     .cart-items { list-style: none; max-height: 200px; overflow-y: auto; margin-bottom: 1rem; }
     .cart-items li { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #ddd; }
     .cart-total { font-weight: 700; margin-bottom: 1rem; text-align: right; font-size: 1.1rem; }
-    footer { background: #a5d6a7; text-align: center; padding: 1rem; margin-top: auto; color: #000; font-size: 0.9rem; border-top: 1px solid #81c784; }
-    footer a { color: #1b5e20; font-weight: 700; }
+
+    /* Footer */
+    .footer {
+      background: #a5d6a7;
+      text-align: center;
+      padding: 1.5rem 1rem;
+      margin-top: auto;
+      color: #000;
+      font-size: 0.95rem;
+      border-top: 2px solid #81c784;
+    }
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 2rem;
+      margin-bottom: 0.8rem;
+    }
+    .footer-links a {
+      color: #1b5e20;
+      text-decoration: none;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: color 0.2s, transform 0.2s;
+      cursor: pointer;
+    }
+    .footer-links a:hover {
+      color: #000;
+      transform: translateY(-2px);
+    }
+    .footer-bottom {
+      font-size: 0.85rem;
+      color: #2d3e2d;
+    }
+
     .blockchain-badge { background: #1b5e20; color: white; padding: 0.15rem 0.6rem; border-radius: 12px; font-size: 0.7rem; margin-left: 0.5rem; }
     .chat-icon { position: fixed; bottom: 20px; right: 20px; background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,0.25); z-index: 999; }
     .chat-window { position: fixed; bottom: 85px; right: 20px; width: 320px; max-height: 400px; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); display: none; flex-direction: column; z-index: 1000; overflow: hidden; }
@@ -76,6 +112,7 @@
     .chat-input-area { display: flex; border-top: 1px solid #c8e6c9; }
     .chat-input-area input { flex: 1; border: none; padding: 0.7rem; outline: none; background: white; color: #000; }
     .chat-input-area button { background: #2e7d32; border: none; color: white; padding: 0 1rem; cursor: pointer; }
+
     @media (max-width: 700px) {
       .content-wrapper { flex-direction: column; }
       .sidebar { width: 100%; display: flex; overflow-x: auto; gap: 0.8rem; padding: 0.8rem; }
@@ -127,13 +164,22 @@
     </div>
   </div>
 
-  <!-- Blockchain Ledger Modal -->
+  <!-- Blockchain Modal -->
   <div class="modal-overlay" id="blockchainModal">
     <div class="modal-box">
       <h2><i class="fas fa-link"></i> Blockchain Ledger</h2>
       <div id="blockchainContent" style="max-height:300px; overflow-y:auto; font-family:monospace; font-size:0.8rem; background:#f5f5f5; padding:0.5rem; margin:0.5rem 0;"></div>
       <button class="close-btn" id="closeBlockchainBtn">Close</button>
       <button id="validateChainBtn" style="background:#1b5e20; color:white; border:none; padding:0.4rem 1rem; border-radius:20px; margin-left:0.5rem;">Validate Chain</button>
+    </div>
+  </div>
+
+  <!-- Info Modals (for footer links) -->
+  <div class="modal-overlay" id="infoModal">
+    <div class="modal-box">
+      <h2 id="infoModalTitle">Title</h2>
+      <div id="infoModalContent">Content</div>
+      <button class="close-btn" id="closeInfoBtn" style="margin-top:1rem;">Close</button>
     </div>
   </div>
 
@@ -150,8 +196,16 @@
     </div>
   </div>
 
-  <footer>
-    <p>&copy; 2026 ElectroHub — Buy & Sell Electronics. <a href="#">Help</a> • <a href="#">Sell</a></p>
+  <footer class="footer">
+    <div class="footer-links">
+      <a onclick="openInfoModal('About', 'ElectroHub is Kenya\'s trusted marketplace for quality electronics. We connect buyers with top-brand smartphones, laptops, accessories and more.')"><i class="fas fa-info-circle"></i> About</a>
+      <a onclick="openInfoModal('Contact', 'Reach us at info@electrohub.co.ke or call +254 712 345 678. Our support team is available Monday–Friday, 8am–6pm EAT.')"><i class="fas fa-envelope"></i> Contact</a>
+      <a onclick="openInfoModal('FAQ', 'Q: How do I order? A: Add items to cart and checkout. Q: What payment methods? A: We accept M-Pesa and cards via IntaSend. Q: How long is delivery? A: 2–4 business days within Nairobi.')"><i class="fas fa-question-circle"></i> FAQ</a>
+      <a onclick="openInfoModal('Shipping', 'We offer nationwide delivery. Shipping fees depend on location and size/weight. Orders over KES 10,000 qualify for free delivery within Nairobi.')"><i class="fas fa-truck"></i> Shipping</a>
+      <a onclick="openInfoModal('Returns', 'You may return defective products within 7 days of delivery. Items must be unused and in original packaging. Refunds are processed within 5 working days.')"><i class="fas fa-undo-alt"></i> Returns</a>
+      <a onclick="openInfoModal('Privacy Policy', 'We do not store chat data. Personal information used during checkout is processed securely and never shared without consent. For details, contact us.')"><i class="fas fa-lock"></i> Privacy</a>
+    </div>
+    <div class="footer-bottom">&copy; 2026 ElectroHub — Buy & Sell Electronics</div>
   </footer>
 
   <script>
@@ -163,7 +217,7 @@
           this.timestamp = timestamp;
           this.data = data;
           this.previousHash = previousHash;
-          this.hash = ''; // will be set asynchronously
+          this.hash = '';
         }
       }
 
@@ -174,7 +228,6 @@
         }
 
         async init() {
-          // Try to load from localStorage
           const saved = localStorage.getItem('electrohub_chain');
           if (saved) {
             try {
@@ -182,7 +235,6 @@
               return;
             } catch (e) {}
           }
-          // Genesis block
           const genesis = new Block(0, new Date().toISOString(), { type: 'genesis' }, '0');
           genesis.hash = await this.computeHash(genesis);
           this.chain = [genesis];
@@ -210,7 +262,6 @@
           for (let i = 1; i < this.chain.length; i++) {
             const curr = this.chain[i];
             const prev = this.chain[i - 1];
-            // We cannot recompute hash synchronously, but we can verify previous hash linkage
             if (curr.previousHash !== prev.hash) return false;
           }
           return true;
@@ -313,8 +364,6 @@
         }
         updateCartUI();
         openModal('cartModal');
-
-        // Record on blockchain (no freeze)
         const p = products.find(pp => pp.id === productId);
         await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name, quantity: existing ? existing.quantity : 1 });
       }
@@ -368,11 +417,19 @@
         alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌'));
       });
 
+      // Info modal (for footer)
+      window.openInfoModal = function(title, content) {
+        document.getElementById('infoModalTitle').textContent = title;
+        document.getElementById('infoModalContent').innerHTML = content;
+        openModal('infoModal');
+      };
+      document.getElementById('closeInfoBtn').addEventListener('click', () => closeModal('infoModal'));
+
       // ==================== SEARCH ====================
       document.getElementById('searchBtn').addEventListener('click', () => { searchTerm = document.getElementById('searchInput').value.trim(); renderProducts(); });
       document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') { searchTerm = e.target.value.trim(); renderProducts(); } });
 
-      // ==================== DEEPSEEK CHAT ====================
+      // ==================== CHAT (Groq with short replies) ====================
       const chatToggle = document.getElementById('chatToggle');
       const chatWindow = document.getElementById('chatWindow');
       const chatMessages = document.getElementById('chatMessages');
@@ -381,13 +438,10 @@
 
       chatToggle.addEventListener('click', () => { chatWindow.style.display = chatWindow.style.display === 'flex' ? 'none' : 'flex'; });
 
-      async function sendToDeepSeek(userMsg) {
-        // Add user message
+      async function sendToAI(userMsg) {
         chatMessages.innerHTML += `<p><strong>You:</strong> ${userMsg}</p>`;
         chatInput.value = '';
         chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        // Show typing indicator
         const typingId = 'typing-' + Date.now();
         chatMessages.innerHTML += `<p id="${typingId}"><em>AI is thinking...</em></p>`;
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -411,7 +465,7 @@
       sendChatBtn.addEventListener('click', () => {
         const msg = chatInput.value.trim();
         if (!msg) return;
-        sendToDeepSeek(msg);
+        sendToAI(msg);
       });
 
       chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendChatBtn.click(); });
