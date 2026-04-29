@@ -11,10 +11,13 @@ export default async function handler(req, res) {
     return res.status(500).json({ reply: 'Groq API key not configured on server.' });
   }
 
-  const systemPrompt = `You are an AI assistant for ElectroHub, an electronics marketplace in Kenya. 
-You have access to the current product list: ${JSON.stringify(products)}.
-Help users find products, give recommendations, answer questions about electronics, and assist with shopping.
-Keep responses friendly, concise, and use Kenyan Shillings (KES).`;
+  const systemPrompt = `You are a helpful assistant for ElectroHub, an electronics shop in Kenya.
+Rules:
+- Answer in **50 words or fewer** total.
+- Never exceed 50 words, even if the user asks for more.
+- Use Kenyan Shillings (KES).
+- Always recommend from this exact product list: ${JSON.stringify(products)}.
+- Be concise, friendly, and direct. Give only the best match and its price.`;
 
   try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -24,12 +27,12 @@ Keep responses friendly, concise, and use Kenyan Shillings (KES).`;
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',   // ← Updated model name
+        model: 'llama-3.1-8b-instant',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
         ],
-        max_tokens: 500,
+        max_tokens: 80,           // enough for ~50 words
         temperature: 0.7
       })
     });
@@ -43,7 +46,7 @@ Keep responses friendly, concise, and use Kenyan Shillings (KES).`;
 
     const reply = data.choices?.[0]?.message?.content;
     if (!reply) {
-      return res.status(200).json({ reply: `Unexpected response. Data: ${JSON.stringify(data).substring(0, 200)}` });
+      return res.status(200).json({ reply: 'Sorry, no response from the assistant.' });
     }
 
     return res.status(200).json({ reply });
