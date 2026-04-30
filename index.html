@@ -346,13 +346,10 @@
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          // Only keep items that still exist in products (by id)
           cart = parsed.filter(item => products.some(p => p.id === item.id));
-          // Update quantities correctly (preserve original)
           cart.forEach(item => {
             const product = products.find(p => p.id === item.id);
             if (product) {
-              // Retain quantity, but update price/name in case product changed
               item.name = product.name;
               item.priceKES = product.priceKES;
               item.image = product.image;
@@ -361,12 +358,8 @@
               item.rating = product.rating;
             }
           });
-        } catch (e) {
-          cart = [];
-        }
-      } else {
-        cart = [];
-      }
+        } catch (e) { cart = []; }
+      } else { cart = []; }
     }
 
     // ==================== AUTH / WISHLIST SETUP ====================
@@ -443,11 +436,11 @@
 
     window.removeFavorite = function(productId) { toggleFavorite(productId); updateWishlistUI(); };
 
-    // ==================== PRODUCT LOADING ====================
+    // ==================== PRODUCT LOADING (from database via API) ====================
     async function loadProducts() {
       try {
-        const res = await fetch('products.json');
-        if (!res.ok) throw new Error('Failed to load');
+        const res = await fetch('/api/products');
+        if (!res.ok) throw new Error('Failed to load products');
         products = await res.json();
         // Restore cart from localStorage after products are loaded
         loadCartFromStorage();
@@ -456,7 +449,8 @@
         updateCartUI();
         document.querySelector('.sidebar li[data-category="all"]').style.fontWeight = 'bold';
       } catch(e) {
-        document.getElementById('productGrid').innerHTML = '<p style="color:red;">Error loading products.</p>';
+        console.error(e);
+        document.getElementById('productGrid').innerHTML = '<p style="color:red;">Error loading products. Please try again later.</p>';
       }
     }
 
@@ -520,7 +514,7 @@
         const p = products.find(pp => pp.id === productId);
         if (p) cart.push({...p, quantity: 1});
       }
-      saveCartToStorage(); // persist cart
+      saveCartToStorage();
       updateCartUI();
       const p = products.find(pp => pp.id === productId);
       await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name });
@@ -746,7 +740,7 @@
         await blockchain.addBlock({ type: 'order_placed', itemsCount: cart.length, totalKES: total });
         alert('Order placed successfully!');
         cart = [];
-        saveCartToStorage(); // clear storage
+        saveCartToStorage();
         updateCartUI();
         closeModal('cartModal');
       } catch (e) {
