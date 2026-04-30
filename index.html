@@ -109,9 +109,6 @@
   </style>
 </head>
 <body>
-  <!-- Hidden IntaSend trigger button -->
-  <button id="intaSendBtn" class="intaSendPayButton" style="display:none;">Pay</button>
-
   <header class="top-bar">
     <div class="logo"><i class="fas fa-bolt"></i> ElectroHub <span class="blockchain-badge">BLOCKCHAIN</span></div>
     <div class="search-section">
@@ -641,7 +638,7 @@
     });
     document.getElementById('closeWishlistBtn').addEventListener('click', ()=>closeModal('wishlistModal'));
 
-    // ==================== CHECKOUT & PAYMENT ====================
+    // ==================== CHECKOUT & PAYMENT (DIRECT API) ====================
     const checkoutModal = document.getElementById('checkoutModal');
     document.getElementById('goToCheckoutBtn').addEventListener('click', () => {
       if (cart.length === 0) {
@@ -676,27 +673,29 @@
       }
 
       const total = cart.reduce((sum, item) => sum + item.priceKES * item.quantity, 0);
-      const hiddenBtn = document.getElementById('intaSendBtn');
 
-      // Set data attributes
-      hiddenBtn.setAttribute('data-amount', total);
-      hiddenBtn.setAttribute('data-currency', 'KES');
-      hiddenBtn.setAttribute('data-email', email);
-      hiddenBtn.setAttribute('data-phone_number', phone);
-      hiddenBtn.setAttribute('data-name', name);
-      hiddenBtn.setAttribute('data-comment', `ElectroHub order for ${cart.length} items`);
-
-      // Init IntaSend
-      if (window.IntaSend && window.IntaSend.init) {
-        window.IntaSend.init({
-          publicAPIKey: intaSendPublicKey,
-          live: false  // true for production
-        });
+      // Use IntaSend directly without hidden button
+      if (!window.IntaSend) {
+        alert('Payment system not loaded. Please refresh the page.');
+        return;
       }
 
-      // Setup callbacks
-      if (window.IntaSend && window.IntaSend.on) {
-        window.IntaSend.on("COMPLETE", (results) => {
+      const intaSendInstance = new window.IntaSend({
+        publicAPIKey: intaSendPublicKey,
+        live: false // set to true for production
+      });
+
+      intaSendInstance
+        .run({
+          amount: total,
+          currency: 'KES',
+          email: email,
+          phone_number: phone,
+          name: name,
+          api_ref: 'ElectroHub-' + Date.now(),
+          comment: `ElectroHub order for ${cart.length} items`
+        })
+        .on('COMPLETE', (results) => {
           // Record on blockchain
           blockchain.addBlock({ type: 'payment', txId: results.id, amount: total, customer: { name, email, phone } });
           // Clear cart
@@ -708,18 +707,15 @@
           document.getElementById('paymentError').style.display = 'none';
           document.getElementById('txnId').textContent = results.id;
         })
-        .on("FAILED", (results) => {
+        .on('FAILED', (results) => {
           document.getElementById('checkoutForm').style.display = 'none';
           document.getElementById('paymentSuccess').style.display = 'none';
           document.getElementById('paymentError').style.display = 'block';
           document.getElementById('errorMsg').textContent = 'Payment failed: ' + (results.error || 'Unknown error.');
         })
-        .on("CANCELLED", () => {
-          // Do nothing, user can try again
+        .on('CANCELLED', () => {
+          // Payment cancelled, do nothing
         });
-      }
-
-      hiddenBtn.click();
     });
 
     document.getElementById('continueShoppingBtn').addEventListener('click', () => {
