@@ -1,0 +1,6 @@
+{
+  "name": "electrohub",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.6.0"
+  }
+}
