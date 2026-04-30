@@ -1,6 +1,7 @@
 {
   "name": "electrohub",
+  "version": "1.0.0",
   "dependencies": {
-    "@neondatabase/serverless": "^0.6.0"
+    "pg": "^8.11.3"
   }
 }
