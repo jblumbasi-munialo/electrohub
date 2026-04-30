@@ -21,6 +21,8 @@
       display: flex;
       flex-direction: column;
     }
+
+    /* Sticky top bar */
     .top-bar {
       background: linear-gradient(90deg, #c8e6c9, #b9dfc2);
       padding: 0.8rem 1.5rem;
@@ -31,6 +33,9 @@
       gap: 1rem;
       box-shadow: 0 4px 12px rgba(0,0,0,0.06);
       border-bottom: 2px solid #81c784;
+      position: sticky;
+      top: 0;
+      z-index: 900;
     }
     .logo { font-size: 1.8rem; font-weight: 700; color: #1b5e20; display: flex; align-items: center; gap: 0.3rem; }
     .logo i { font-size: 2rem; color: #2e7d32; }
@@ -42,8 +47,27 @@
     .nav-icons i { cursor: pointer; transition: transform 0.15s, background 0.2s; background: rgba(255,255,255,0.7); padding: 0.5rem; border-radius: 50%; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center; color: #1b5e20; position: relative; }
     .nav-icons i:hover { transform: scale(1.08); background: white; color: #000; }
     .cart-count, .wishlist-count { background: #000; color: #fff; font-size: 0.7rem; border-radius: 50%; padding: 0.15rem 0.4rem; position: absolute; top: -5px; right: -5px; font-weight: bold; }
-    .content-wrapper { display: flex; flex: 1; flex-wrap: wrap; padding: 1.5rem; gap: 1.5rem; }
-    .sidebar { background: #d7f0db; border-radius: 16px; padding: 1.2rem; width: 220px; box-shadow: 0 6px 16px rgba(0,0,0,0.04); align-self: flex-start; border: 1px solid #b9dfc2; }
+
+    /* Main layout: sticky sidebar + scrollable product area */
+    .content-wrapper {
+      display: flex;
+      flex: 1;
+      padding: 1.5rem;
+      gap: 1.5rem;
+      align-items: flex-start;
+    }
+    .sidebar {
+      background: #d7f0db;
+      border-radius: 16px;
+      padding: 1.2rem;
+      width: 220px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.04);
+      border: 1px solid #b9dfc2;
+      position: sticky;
+      top: 5.5rem;  /* height of top-bar + spacing */
+      align-self: flex-start;
+      flex-shrink: 0;
+    }
     .sidebar h3 { margin-bottom: 1rem; font-size: 1.2rem; color: #1b5e20; border-bottom: 2px solid #81c784; padding-bottom: 0.4rem; }
     .sidebar ul { list-style: none; }
     .sidebar li { padding: 0.6rem 0.4rem; cursor: pointer; border-radius: 8px; transition: background 0.15s; display: flex; align-items: center; gap: 0.5rem; color: #000; font-weight: 500; }
@@ -52,6 +76,8 @@
     .main-content { flex: 1; min-width: 300px; }
     .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #1b5e20; display: flex; align-items: center; gap: 0.5rem; }
     .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.5rem; }
+
+    /* Product cards unchanged */
     .product-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 6px 18px rgba(0,0,0,0.06); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; border: 1px solid #b9dfc2; position: relative; }
     .product-card:hover { transform: translateY(-6px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
     .product-img { width: 100%; height: 190px; background: #eef7ea; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
@@ -66,7 +92,7 @@
     .add-to-cart { margin-top: 0.3rem; background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; border: none; padding: 0.6rem; border-radius: 24px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.3rem; letter-spacing: 0.3px; }
     .add-to-cart:hover { background: linear-gradient(135deg, #1b5e20, #0d4010); transform: scale(1.02); }
 
-    /* Modals */
+    /* Modals keep existing styles */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
     .modal-box { background: white; border-radius: 16px; padding: 1.5rem; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); color: #000; max-height: 90vh; overflow-y: auto; }
     .modal-box h2 { margin-bottom: 1rem; color: #1b5e20; }
@@ -98,10 +124,7 @@
       transform: translateY(-20px);
       transition: opacity 0.3s, transform 0.3s;
     }
-    .toast.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    .toast.show { opacity: 1; transform: translateY(0); }
 
     /* Footer */
     .footer { background: #a5d6a7; text-align: center; padding: 1.5rem 1rem; margin-top: auto; color: #000; font-size: 0.95rem; border-top: 2px solid #81c784; }
@@ -111,7 +134,48 @@
     .footer-bottom { font-size: 0.85rem; color: #2d3e2d; }
 
     .blockchain-badge { background: #1b5e20; color: white; padding: 0.15rem 0.6rem; border-radius: 12px; font-size: 0.7rem; margin-left: 0.5rem; }
-    .chat-icon { position: fixed; bottom: 20px; right: 20px; background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,0.25); z-index: 999; }
+
+    /* Floating chat and cart buttons */
+    .chat-icon {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #2e7d32, #1b5e20);
+      color: white;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.7rem;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      z-index: 999;
+    }
+    .floating-cart {
+      position: fixed;
+      bottom: 20px;
+      right: 90px;   /* space for chat button */
+      background: linear-gradient(135deg, #2e7d32, #1b5e20);
+      color: white;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.7rem;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      z-index: 999;
+      position: relative;
+    }
+    .floating-cart .cart-count {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+    }
     .chat-window { position: fixed; bottom: 85px; right: 20px; width: 320px; max-height: 400px; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); display: none; flex-direction: column; z-index: 1000; overflow: hidden; }
     .chat-header { background: #2e7d32; color: white; padding: 0.7rem 1rem; font-weight: 700; }
     .chat-messages { flex: 1; overflow-y: auto; padding: 0.8rem; background: #f9fbe7; max-height: 250px; }
@@ -119,9 +183,20 @@
     .chat-input-area input { flex: 1; border: none; padding: 0.7rem; outline: none; background: white; color: #000; }
     .chat-input-area button { background: #2e7d32; border: none; color: white; padding: 0 1rem; cursor: pointer; }
 
+    /* Mobile adjustments: sidebar becomes horizontal, not sticky */
     @media (max-width: 700px) {
       .content-wrapper { flex-direction: column; }
-      .sidebar { width: 100%; display: flex; overflow-x: auto; gap: 0.8rem; padding: 0.8rem; }
+      .sidebar {
+        width: 100%;
+        display: flex;
+        overflow-x: auto;
+        gap: 0.8rem;
+        padding: 0.8rem;
+        position: static;
+        top: auto;
+        box-shadow: none;
+        border-radius: 0;
+      }
       .sidebar ul { display: flex; gap: 0.8rem; flex-wrap: nowrap; }
       .sidebar li { white-space: nowrap; background: #c8e6c9; border-radius: 20px; padding: 0.4rem 0.9rem; }
       .sidebar h3 { display: none; }
@@ -130,6 +205,10 @@
   </style>
 </head>
 <body>
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Sticky header -->
   <header class="top-bar">
     <div class="logo"><i class="fas fa-bolt"></i> ElectroHub <span class="blockchain-badge">BLOCKCHAIN</span></div>
     <div class="search-section">
@@ -150,21 +229,40 @@
   </header>
 
   <div class="content-wrapper">
+    <!-- Sticky sidebar (on desktop) -->
     <aside class="sidebar">
       <h3>Categories</h3>
       <ul id="categoryList">
         <li data-category="all"><i class="fas fa-th-large"></i> All</li>
       </ul>
     </aside>
+    <!-- Scrollable product grid -->
     <main class="main-content">
       <h2 class="section-title">🔥 Hot Deals in Electronics</h2>
       <div class="product-grid" id="productGrid">Loading products...</div>
     </main>
   </div>
 
-  <!-- Toast notification -->
-  <div class="toast" id="toast"></div>
+  <!-- Floating cart button (next to chatbot) -->
+  <div class="floating-cart" id="floatingCartIcon" title="Cart">
+    <i class="fas fa-shopping-cart"></i>
+    <span class="cart-count" id="floatingCartCount">0</span>
+  </div>
 
+  <!-- Chatbot toggle -->
+  <div class="chat-icon" id="chatToggle"><i class="fas fa-robot"></i></div>
+  <div class="chat-window" id="chatWindow">
+    <div class="chat-header">AI Assistant</div>
+    <div class="chat-messages" id="chatMessages">
+      <p><strong>AI:</strong> Hello! Ask me anything about our electronics.</p>
+    </div>
+    <div class="chat-input-area">
+      <input type="text" id="chatInput" placeholder="Type your message..." />
+      <button id="sendChatBtn"><i class="fas fa-paper-plane"></i></button>
+    </div>
+  </div>
+
+  <!-- Modals (unchanged) -->
   <!-- Login Modal -->
   <div class="modal-overlay" id="loginModal">
     <div class="modal-box">
@@ -273,19 +371,6 @@
       <h2 id="infoModalTitle">Title</h2>
       <div id="infoModalContent">Content</div>
       <button class="close-btn" id="closeInfoBtn" style="margin-top:1rem;">Close</button>
-    </div>
-  </div>
-
-  <!-- Chat -->
-  <div class="chat-icon" id="chatToggle"><i class="fas fa-robot"></i></div>
-  <div class="chat-window" id="chatWindow">
-    <div class="chat-header">AI Assistant</div>
-    <div class="chat-messages" id="chatMessages">
-      <p><strong>AI:</strong> Hello! Ask me anything about our electronics.</p>
-    </div>
-    <div class="chat-input-area">
-      <input type="text" id="chatInput" placeholder="Type your message..." />
-      <button id="sendChatBtn"><i class="fas fa-paper-plane"></i></button>
     </div>
   </div>
 
@@ -556,7 +641,6 @@
         if (p) cart.push({...p, quantity:1});
       }
       updateCartUI();
-      // NO modal – just a toast notification
       const p = products.find(pp => pp.id === productId);
       showToast(`${p.name} added to cart ✅`);
       await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name });
@@ -566,7 +650,11 @@
 
     function updateCartUI() {
       const totalItems = cart.reduce((s,i)=>s+i.quantity,0);
+      // Update header cart count
       document.getElementById('cartCount').textContent = totalItems;
+      // Update floating cart count
+      document.getElementById('floatingCartCount').textContent = totalItems;
+
       const list = document.getElementById('cartItemsList');
       const tot = document.getElementById('cartTotal');
       if (cart.length === 0) {
@@ -592,7 +680,10 @@
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
+    // Cart modal from header cart icon
     document.getElementById('cartIcon').addEventListener('click', ()=>openModal('cartModal'));
+    // Floating cart button also opens the same cart modal
+    document.getElementById('floatingCartIcon').addEventListener('click', ()=>openModal('cartModal'));
     document.getElementById('closeCartBtn').addEventListener('click', ()=>closeModal('cartModal'));
 
     document.getElementById('blockchainIcon').addEventListener('click', async ()=>{
@@ -676,7 +767,6 @@
     document.getElementById('closeWishlistBtn').addEventListener('click', ()=>closeModal('wishlistModal'));
 
     // ==================== CHECKOUT & PAYMENT (DIRECT API) ====================
-    const checkoutModal = document.getElementById('checkoutModal');
     document.getElementById('goToCheckoutBtn').addEventListener('click', () => {
       if (cart.length === 0) {
         alert('Your cart is empty!');
