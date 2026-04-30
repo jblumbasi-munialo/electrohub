@@ -29,6 +29,9 @@
       gap: 1rem;
       box-shadow: 0 4px 12px rgba(0,0,0,0.06);
       border-bottom: 2px solid #81c784;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
     .logo { font-size: 1.8rem; font-weight: 700; color: #1b5e20; display: flex; align-items: center; gap: 0.3rem; }
     .logo i { font-size: 2rem; color: #2e7d32; }
@@ -333,6 +336,39 @@
     let searchTerm = '';
     let userFavorites = [];
 
+    // Cart persistence
+    function saveCartToStorage() {
+      localStorage.setItem('electrohub_cart', JSON.stringify(cart));
+    }
+
+    function loadCartFromStorage() {
+      const saved = localStorage.getItem('electrohub_cart');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          // Only keep items that still exist in products (by id)
+          cart = parsed.filter(item => products.some(p => p.id === item.id));
+          // Update quantities correctly (preserve original)
+          cart.forEach(item => {
+            const product = products.find(p => p.id === item.id);
+            if (product) {
+              // Retain quantity, but update price/name in case product changed
+              item.name = product.name;
+              item.priceKES = product.priceKES;
+              item.image = product.image;
+              item.icon = product.icon;
+              item.category = product.category;
+              item.rating = product.rating;
+            }
+          });
+        } catch (e) {
+          cart = [];
+        }
+      } else {
+        cart = [];
+      }
+    }
+
     // ==================== AUTH / WISHLIST SETUP ====================
     function setupAuthObserver() {
       auth.onAuthStateChanged(user => {
@@ -413,6 +449,8 @@
         const res = await fetch('products.json');
         if (!res.ok) throw new Error('Failed to load');
         products = await res.json();
+        // Restore cart from localStorage after products are loaded
+        loadCartFromStorage();
         populateCategories();
         renderProducts();
         updateCartUI();
@@ -478,14 +516,21 @@
     async function addToCart(productId) {
       const existing = cart.find(i => i.id === productId);
       if (existing) existing.quantity++;
-      else { const p = products.find(pp => pp.id === productId); if (p) cart.push({...p, quantity:1}); }
+      else {
+        const p = products.find(pp => pp.id === productId);
+        if (p) cart.push({...p, quantity: 1});
+      }
+      saveCartToStorage(); // persist cart
       updateCartUI();
-      // Do NOT open cart modal automatically
       const p = products.find(pp => pp.id === productId);
       await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name });
     }
 
-    function removeFromCart(productId) { cart = cart.filter(i => i.id !== productId); updateCartUI(); }
+    function removeFromCart(productId) {
+      cart = cart.filter(i => i.id !== productId);
+      saveCartToStorage();
+      updateCartUI();
+    }
 
     function updateCartUI() {
       const totalItems = cart.reduce((s,i)=>s+i.quantity,0);
@@ -675,7 +720,6 @@
       if (!userData.phone) {
         alert('Please update your profile with a valid phone number before placing an order. It is required for delivery.');
         closeModal('cartModal');
-        // open profile modal
         document.getElementById('profileName').value = auth.currentUser.displayName || '';
         document.getElementById('profilePhone').value = userData.phone || '';
         document.getElementById('profileStreet').value = userData.street || '';
@@ -702,6 +746,7 @@
         await blockchain.addBlock({ type: 'order_placed', itemsCount: cart.length, totalKES: total });
         alert('Order placed successfully!');
         cart = [];
+        saveCartToStorage(); // clear storage
         updateCartUI();
         closeModal('cartModal');
       } catch (e) {
