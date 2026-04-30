@@ -480,7 +480,7 @@
       if (existing) existing.quantity++;
       else { const p = products.find(pp => pp.id === productId); if (p) cart.push({...p, quantity:1}); }
       updateCartUI();
-      openModal('cartModal');
+      // Do NOT open cart modal automatically
       const p = products.find(pp => pp.id === productId);
       await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name });
     }
@@ -629,7 +629,6 @@
     });
 
     // ==================== ORDERS ====================
-    // View orders button in profile
     document.getElementById('viewOrdersBtn').addEventListener('click', async () => {
       if (!auth.currentUser) return;
       const user = auth.currentUser;
@@ -671,7 +670,6 @@
       }
       if (cart.length === 0) return;
 
-      // Check if user has phone number
       const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
       const userData = userDoc.exists ? userDoc.data() : {};
       if (!userData.phone) {
@@ -701,7 +699,6 @@
 
       try {
         await db.collection('users').doc(auth.currentUser.uid).collection('orders').add(orderData);
-        // Record on blockchain
         await blockchain.addBlock({ type: 'order_placed', itemsCount: cart.length, totalKES: total });
         alert('Order placed successfully!');
         cart = [];
