@@ -114,9 +114,7 @@
     </div>
     <div class="nav-icons">
       <i class="fas fa-link" id="blockchainIcon" title="Blockchain Ledger"></i>
-      <!-- User profile icon (logged in state changes this) -->
       <i class="far fa-user" id="userIcon" title="Login / Profile"></i>
-      <!-- Wishlist heart icon -->
       <i class="far fa-heart" id="wishlistIcon" title="Wishlist" style="position:relative;">
         <span class="wishlist-count" id="wishlistCount" style="display:none;">0</span>
       </i>
@@ -240,14 +238,13 @@
 
   <script>
     // ==================== FIREBASE CONFIG ====================
-    // REPLACE with your Firebase config object
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyBPdBYIVg6k_9SOGuZYz-FV091nLdMgNbM",
+      authDomain: "electrohub-kenya.firebaseapp.com",
+      projectId: "electrohub-kenya",
+      storageBucket: "electrohub-kenya.firebasestorage.app",
+      messagingSenderId: "256960919112",
+      appId: "1:256960919112:web:7adc2189cb1be0f468ca7d"
     };
 
     // Initialize Firebase
@@ -319,7 +316,7 @@
     let cart = [];
     let currentCategory = 'all';
     let searchTerm = '';
-    let userFavorites = [];   // array of product IDs the user has liked
+    let userFavorites = [];
 
     // Auth state observer
     auth.onAuthStateChanged(user => {
@@ -327,7 +324,7 @@
         document.getElementById('userIcon').className = 'fas fa-user-check';
         document.getElementById('userIcon').style.color = '#2e7d32';
         document.getElementById('userIcon').title = 'Profile (' + user.email + ')';
-        loadFavorites(user.uid);  // fetch wishlist from Firestore
+        loadFavorites(user.uid);
       } else {
         document.getElementById('userIcon').className = 'far fa-user';
         document.getElementById('userIcon').style.color = '';
@@ -346,7 +343,7 @@
         userFavorites = [];
       }
       updateWishlistUI();
-      renderProducts(); // re-render to show active hearts
+      renderProducts();
     }
 
     async function saveFavorites() {
@@ -380,7 +377,6 @@
         countSpan.style.display = 'none';
       }
 
-      // Update wishlist modal content
       const wc = document.getElementById('wishlistContent');
       if (userFavorites.length === 0) {
         wc.innerHTML = '<p>No favorite products yet. Click the ❤️ on any product to save it here.</p>';
@@ -536,7 +532,6 @@
     // ==================== AUTH MODALS ====================
     document.getElementById('userIcon').addEventListener('click', () => {
       if (auth.currentUser) {
-        // Show profile
         const user = auth.currentUser;
         document.getElementById('profileContent').innerHTML = `
           <p><strong>Name:</strong> ${user.displayName || 'Not set'}</p>
