@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
   <title>ElectroHub • Buy & Sell Electronics</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <!-- Firebase SDKs (Auth + Firestore) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -34,9 +38,9 @@
     .search-section button { background: #2e7d32; border: none; color: white; padding: 0 1.5rem; font-size: 1rem; cursor: pointer; transition: background 0.2s; font-weight: 600; }
     .search-section button:hover { background: #1b5e20; }
     .nav-icons { display: flex; align-items: center; gap: 1.5rem; font-size: 1.3rem; color: #1b5e20; }
-    .nav-icons i { cursor: pointer; transition: transform 0.15s, background 0.2s; background: rgba(255,255,255,0.7); padding: 0.5rem; border-radius: 50%; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center; color: #1b5e20; }
+    .nav-icons i { cursor: pointer; transition: transform 0.15s, background 0.2s; background: rgba(255,255,255,0.7); padding: 0.5rem; border-radius: 50%; width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center; color: #1b5e20; position: relative; }
     .nav-icons i:hover { transform: scale(1.08); background: white; color: #000; }
-    .cart-count { background: #000; color: #fff; font-size: 0.7rem; border-radius: 50%; padding: 0.15rem 0.4rem; position: relative; top: -8px; left: -8px; font-weight: bold; }
+    .cart-count, .wishlist-count { background: #000; color: #fff; font-size: 0.7rem; border-radius: 50%; padding: 0.15rem 0.4rem; position: absolute; top: -5px; right: -5px; font-weight: bold; }
     .content-wrapper { display: flex; flex: 1; flex-wrap: wrap; padding: 1.5rem; gap: 1.5rem; }
     .sidebar { background: #d7f0db; border-radius: 16px; padding: 1.2rem; width: 220px; box-shadow: 0 6px 16px rgba(0,0,0,0.04); align-self: flex-start; border: 1px solid #b9dfc2; }
     .sidebar h3 { margin-bottom: 1rem; font-size: 1.2rem; color: #1b5e20; border-bottom: 2px solid #81c784; padding-bottom: 0.4rem; }
@@ -47,11 +51,13 @@
     .main-content { flex: 1; min-width: 300px; }
     .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #1b5e20; display: flex; align-items: center; gap: 0.5rem; }
     .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1.5rem; }
-    .product-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 6px 18px rgba(0,0,0,0.06); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; border: 1px solid #b9dfc2; }
+    .product-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 6px 18px rgba(0,0,0,0.06); transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; border: 1px solid #b9dfc2; position: relative; }
     .product-card:hover { transform: translateY(-6px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
     .product-img { width: 100%; height: 190px; background: #eef7ea; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
     .product-img img { width: 100%; height: 100%; object-fit: cover; }
     .product-img i.fallback-icon { font-size: 3.5rem; color: #558b2f; opacity: 0.5; position: absolute; }
+    .fav-btn { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9); border-radius: 50%; width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; font-size: 1.2rem; color: #ccc; }
+    .fav-btn.active { color: #e53935; }
     .product-info { padding: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; color: #000; }
     .product-name { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .product-price { font-weight: 800; font-size: 1.3rem; color: #1b5e20; }
@@ -64,45 +70,21 @@
     .modal-box { background: white; border-radius: 16px; padding: 1.5rem; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); color: #000; max-height: 90vh; overflow-y: auto; }
     .modal-box h2 { margin-bottom: 1rem; color: #1b5e20; }
     .close-btn { background: #c8e6c9; border: none; padding: 0.5rem 1rem; border-radius: 20px; cursor: pointer; font-weight: 600; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 0.3rem; color: #1b5e20; }
+    .form-group input { width: 100%; padding: 0.7rem; border: 2px solid #c8e6c9; border-radius: 8px; font-size: 1rem; outline: none; }
+    .form-group input:focus { border-color: #2e7d32; }
+    .auth-btn { background: #2e7d32; color: white; border: none; padding: 0.8rem; border-radius: 30px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 0.5rem; }
     .cart-items { list-style: none; max-height: 200px; overflow-y: auto; margin-bottom: 1rem; }
     .cart-items li { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #ddd; }
     .cart-total { font-weight: 700; margin-bottom: 1rem; text-align: right; font-size: 1.1rem; }
 
     /* Footer */
-    .footer {
-      background: #a5d6a7;
-      text-align: center;
-      padding: 1.5rem 1rem;
-      margin-top: auto;
-      color: #000;
-      font-size: 0.95rem;
-      border-top: 2px solid #81c784;
-    }
-    .footer-links {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 2rem;
-      margin-bottom: 0.8rem;
-    }
-    .footer-links a {
-      color: #1b5e20;
-      text-decoration: none;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-      transition: color 0.2s, transform 0.2s;
-      cursor: pointer;
-    }
-    .footer-links a:hover {
-      color: #000;
-      transform: translateY(-2px);
-    }
-    .footer-bottom {
-      font-size: 0.85rem;
-      color: #2d3e2d;
-    }
+    .footer { background: #a5d6a7; text-align: center; padding: 1.5rem 1rem; margin-top: auto; color: #000; font-size: 0.95rem; border-top: 2px solid #81c784; }
+    .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem; margin-bottom: 0.8rem; }
+    .footer-links a { color: #1b5e20; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 0.3rem; transition: color 0.2s, transform 0.2s; cursor: pointer; }
+    .footer-links a:hover { color: #000; transform: translateY(-2px); }
+    .footer-bottom { font-size: 0.85rem; color: #2d3e2d; }
 
     .blockchain-badge { background: #1b5e20; color: white; padding: 0.15rem 0.6rem; border-radius: 12px; font-size: 0.7rem; margin-left: 0.5rem; }
     .chat-icon { position: fixed; bottom: 20px; right: 20px; background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.7rem; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,0.25); z-index: 999; }
@@ -132,8 +114,12 @@
     </div>
     <div class="nav-icons">
       <i class="fas fa-link" id="blockchainIcon" title="Blockchain Ledger"></i>
-      <i class="far fa-user" title="Account"></i>
-      <i class="far fa-heart" title="Wishlist"></i>
+      <!-- User profile icon (logged in state changes this) -->
+      <i class="far fa-user" id="userIcon" title="Login / Profile"></i>
+      <!-- Wishlist heart icon -->
+      <i class="far fa-heart" id="wishlistIcon" title="Wishlist" style="position:relative;">
+        <span class="wishlist-count" id="wishlistCount" style="display:none;">0</span>
+      </i>
       <span style="position: relative; display: flex; align-items: center;">
         <i class="fas fa-shopping-cart" id="cartIcon" title="Cart"></i>
         <span class="cart-count" id="cartCount">0</span>
@@ -152,6 +138,50 @@
       <h2 class="section-title">🔥 Hot Deals in Electronics</h2>
       <div class="product-grid" id="productGrid">Loading products...</div>
     </main>
+  </div>
+
+  <!-- Login Modal -->
+  <div class="modal-overlay" id="loginModal">
+    <div class="modal-box">
+      <h2>Login</h2>
+      <div class="form-group"><label>Email</label><input type="email" id="loginEmail" /></div>
+      <div class="form-group"><label>Password</label><input type="password" id="loginPassword" /></div>
+      <button class="auth-btn" id="loginBtn">Login</button>
+      <p style="margin-top:1rem; text-align:center;">Don't have an account? <a id="showSignup" style="color:#2e7d32; cursor:pointer;">Sign up here</a></p>
+      <button class="close-btn" id="closeLoginBtn" style="margin-top:0.5rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Signup Modal -->
+  <div class="modal-overlay" id="signupModal">
+    <div class="modal-box">
+      <h2>Sign Up</h2>
+      <div class="form-group"><label>Name</label><input type="text" id="signupName" /></div>
+      <div class="form-group"><label>Email</label><input type="email" id="signupEmail" /></div>
+      <div class="form-group"><label>Password</label><input type="password" id="signupPassword" /></div>
+      <button class="auth-btn" id="signupBtn">Create Account</button>
+      <p style="margin-top:1rem; text-align:center;">Already have an account? <a id="showLogin" style="color:#2e7d32; cursor:pointer;">Login here</a></p>
+      <button class="close-btn" id="closeSignupBtn" style="margin-top:0.5rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Profile Modal -->
+  <div class="modal-overlay" id="profileModal">
+    <div class="modal-box">
+      <h2>Your Profile</h2>
+      <div id="profileContent">Loading...</div>
+      <button class="auth-btn" id="logoutBtn" style="background:#c62828; margin-top:1rem;">Logout</button>
+      <button class="close-btn" id="closeProfileBtn" style="margin-top:0.5rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Wishlist Modal -->
+  <div class="modal-overlay" id="wishlistModal">
+    <div class="modal-box">
+      <h2>Your Wishlist ❤️</h2>
+      <div id="wishlistContent">No favorites yet.</div>
+      <button class="close-btn" id="closeWishlistBtn" style="margin-top:0.5rem;">Close</button>
+    </div>
   </div>
 
   <!-- Cart Modal -->
@@ -174,7 +204,7 @@
     </div>
   </div>
 
-  <!-- Info Modals (for footer links) -->
+  <!-- Info Modals -->
   <div class="modal-overlay" id="infoModal">
     <div class="modal-box">
       <h2 id="infoModalTitle">Title</h2>
@@ -186,7 +216,7 @@
   <!-- Chat -->
   <div class="chat-icon" id="chatToggle"><i class="fas fa-robot"></i></div>
   <div class="chat-window" id="chatWindow">
-    <div class="chat-header">DeepSeek AI Assistant</div>
+    <div class="chat-header">AI Assistant</div>
     <div class="chat-messages" id="chatMessages">
       <p><strong>AI:</strong> Hello! Ask me anything about our electronics.</p>
     </div>
@@ -198,140 +228,226 @@
 
   <footer class="footer">
     <div class="footer-links">
-      <a onclick="openInfoModal('About', 'ElectroHub is Kenya\'s trusted marketplace for quality electronics. We connect buyers with top-brand smartphones, laptops, accessories and more.')"><i class="fas fa-info-circle"></i> About</a>
-      <a onclick="openInfoModal('Contact', 'Reach us at info@electrohub.co.ke or call +254 712 345 678. Our support team is available Monday–Friday, 8am–6pm EAT.')"><i class="fas fa-envelope"></i> Contact</a>
-      <a onclick="openInfoModal('FAQ', 'Q: How do I order? A: Add items to cart and checkout. Q: What payment methods? A: We accept M-Pesa and cards via IntaSend. Q: How long is delivery? A: 2–4 business days within Nairobi.')"><i class="fas fa-question-circle"></i> FAQ</a>
-      <a onclick="openInfoModal('Shipping', 'We offer nationwide delivery. Shipping fees depend on location and size/weight. Orders over KES 10,000 qualify for free delivery within Nairobi.')"><i class="fas fa-truck"></i> Shipping</a>
-      <a onclick="openInfoModal('Returns', 'You may return defective products within 7 days of delivery. Items must be unused and in original packaging. Refunds are processed within 5 working days.')"><i class="fas fa-undo-alt"></i> Returns</a>
-      <a onclick="openInfoModal('Privacy Policy', 'We do not store chat data. Personal information used during checkout is processed securely and never shared without consent. For details, contact us.')"><i class="fas fa-lock"></i> Privacy</a>
+      <a onclick="openInfoModal('About', 'ElectroHub is Kenya\'s trusted marketplace for quality electronics.')"><i class="fas fa-info-circle"></i> About</a>
+      <a onclick="openInfoModal('Contact', 'Reach us at info@electrohub.co.ke or call +254 712 345 678.')"><i class="fas fa-envelope"></i> Contact</a>
+      <a onclick="openInfoModal('FAQ', 'Q: How do I order? A: Add items to cart and checkout.')"><i class="fas fa-question-circle"></i> FAQ</a>
+      <a onclick="openInfoModal('Shipping', 'We offer nationwide delivery. Orders over KES 10,000 qualify for free delivery within Nairobi.')"><i class="fas fa-truck"></i> Shipping</a>
+      <a onclick="openInfoModal('Returns', 'You may return defective products within 7 days of delivery.')"><i class="fas fa-undo-alt"></i> Returns</a>
+      <a onclick="openInfoModal('Privacy Policy', 'We do not store chat data. Personal information used during checkout is processed securely.')"><i class="fas fa-lock"></i> Privacy</a>
     </div>
     <div class="footer-bottom">&copy; 2026 ElectroHub — Buy & Sell Electronics</div>
   </footer>
 
   <script>
-    (function() {
-      // ==================== SIMPLE BLOCKCHAIN (record keeping, no mining) ====================
-      class Block {
-        constructor(index, timestamp, data, previousHash = '') {
-          this.index = index;
-          this.timestamp = timestamp;
-          this.data = data;
-          this.previousHash = previousHash;
-          this.hash = '';
+    // ==================== FIREBASE CONFIG ====================
+    // REPLACE with your Firebase config object
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // ==================== SIMPLE BLOCKCHAIN ====================
+    class Block {
+      constructor(index, timestamp, data, previousHash = '') {
+        this.index = index;
+        this.timestamp = timestamp;
+        this.data = data;
+        this.previousHash = previousHash;
+        this.hash = '';
+      }
+    }
+
+    class Blockchain {
+      constructor() {
+        this.chain = [];
+        this.ready = this.init();
+      }
+      async init() {
+        const saved = localStorage.getItem('electrohub_chain');
+        if (saved) {
+          try { this.chain = JSON.parse(saved); return; } catch (e) {}
         }
+        const genesis = new Block(0, new Date().toISOString(), { type: 'genesis' }, '0');
+        genesis.hash = await this.computeHash(genesis);
+        this.chain = [genesis];
+        this.save();
+      }
+      async computeHash(block) {
+        const data = block.index + block.previousHash + block.timestamp + JSON.stringify(block.data);
+        const enc = new TextEncoder();
+        const hashBuf = await crypto.subtle.digest('SHA-256', enc.encode(data));
+        return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('');
+      }
+      async addBlock(data) {
+        await this.ready;
+        const latest = this.chain[this.chain.length-1];
+        const nb = new Block(this.chain.length, new Date().toISOString(), data, latest.hash);
+        nb.hash = await this.computeHash(nb);
+        this.chain.push(nb);
+        this.save();
+      }
+      isChainValid() {
+        for(let i=1; i<this.chain.length; i++) {
+          if (this.chain[i].previousHash !== this.chain[i-1].hash) return false;
+        }
+        return true;
+      }
+      save() { localStorage.setItem('electrohub_chain', JSON.stringify(this.chain)); }
+      getChainHTML() {
+        if (!this.chain.length) return '<p>No blocks.</p>';
+        return this.chain.map(b => `
+          <div style="border-bottom:1px solid #ccc;padding:0.3rem 0;">
+            <strong>Block #${b.index}</strong> <span style="color:#1b5e20;">${b.hash.substring(0,10)}...</span><br>
+            <small>Prev: ${b.previousHash.substring(0,10)}... | ${new Date(b.timestamp).toLocaleString()}</small><br>
+            <small>Data: ${JSON.stringify(b.data)}</small>
+          </div>`).join('');
+      }
+    }
+    const blockchain = new Blockchain();
+
+    // ==================== GLOBAL STATE ====================
+    let products = [];
+    let cart = [];
+    let currentCategory = 'all';
+    let searchTerm = '';
+    let userFavorites = [];   // array of product IDs the user has liked
+
+    // Auth state observer
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        document.getElementById('userIcon').className = 'fas fa-user-check';
+        document.getElementById('userIcon').style.color = '#2e7d32';
+        document.getElementById('userIcon').title = 'Profile (' + user.email + ')';
+        loadFavorites(user.uid);  // fetch wishlist from Firestore
+      } else {
+        document.getElementById('userIcon').className = 'far fa-user';
+        document.getElementById('userIcon').style.color = '';
+        document.getElementById('userIcon').title = 'Login / Profile';
+        userFavorites = [];
+        updateWishlistUI();
+      }
+    });
+
+    // ==================== FAVORITES / WISHLIST ====================
+    async function loadFavorites(uid) {
+      const doc = await db.collection('users').doc(uid).get();
+      if (doc.exists && doc.data().favorites) {
+        userFavorites = doc.data().favorites;
+      } else {
+        userFavorites = [];
+      }
+      updateWishlistUI();
+      renderProducts(); // re-render to show active hearts
+    }
+
+    async function saveFavorites() {
+      const user = auth.currentUser;
+      if (!user) return;
+      await db.collection('users').doc(user.uid).set({
+        email: user.email,
+        name: user.displayName || '',
+        favorites: userFavorites
+      }, { merge: true });
+    }
+
+    function toggleFavorite(productId) {
+      const idx = userFavorites.indexOf(productId);
+      if (idx > -1) {
+        userFavorites.splice(idx, 1);
+      } else {
+        userFavorites.push(productId);
+      }
+      saveFavorites();
+      updateWishlistUI();
+      renderProducts();
+    }
+
+    function updateWishlistUI() {
+      const countSpan = document.getElementById('wishlistCount');
+      if (userFavorites.length > 0) {
+        countSpan.style.display = 'inline';
+        countSpan.textContent = userFavorites.length;
+      } else {
+        countSpan.style.display = 'none';
       }
 
-      class Blockchain {
-        constructor() {
-          this.chain = [];
-          this.ready = this.init();
-        }
-
-        async init() {
-          const saved = localStorage.getItem('electrohub_chain');
-          if (saved) {
-            try {
-              this.chain = JSON.parse(saved);
-              return;
-            } catch (e) {}
-          }
-          const genesis = new Block(0, new Date().toISOString(), { type: 'genesis' }, '0');
-          genesis.hash = await this.computeHash(genesis);
-          this.chain = [genesis];
-          this.save();
-        }
-
-        async computeHash(block) {
-          const data = block.index + block.previousHash + block.timestamp + JSON.stringify(block.data);
-          const encoder = new TextEncoder();
-          const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
-          const hashArray = Array.from(new Uint8Array(hashBuffer));
-          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        async addBlock(data) {
-          await this.ready;
-          const latest = this.chain[this.chain.length - 1];
-          const newBlock = new Block(this.chain.length, new Date().toISOString(), data, latest.hash);
-          newBlock.hash = await this.computeHash(newBlock);
-          this.chain.push(newBlock);
-          this.save();
-        }
-
-        isChainValid() {
-          for (let i = 1; i < this.chain.length; i++) {
-            const curr = this.chain[i];
-            const prev = this.chain[i - 1];
-            if (curr.previousHash !== prev.hash) return false;
-          }
-          return true;
-        }
-
-        save() {
-          localStorage.setItem('electrohub_chain', JSON.stringify(this.chain));
-        }
-
-        getChainHTML() {
-          if (!this.chain.length) return '<p>No blocks yet.</p>';
-          return this.chain.map(b => `
-            <div style="border-bottom:1px solid #ccc; padding:0.3rem 0;">
-              <strong>Block #${b.index}</strong> <span style="color:#1b5e20;">${b.hash.substring(0,10)}...</span><br>
-              <small>Prev: ${b.previousHash.substring(0,10)}... | Time: ${new Date(b.timestamp).toLocaleString()}</small><br>
-              <small>Data: ${JSON.stringify(b.data)}</small>
-            </div>
-          `).join('');
-        }
+      // Update wishlist modal content
+      const wc = document.getElementById('wishlistContent');
+      if (userFavorites.length === 0) {
+        wc.innerHTML = '<p>No favorite products yet. Click the ❤️ on any product to save it here.</p>';
+      } else {
+        const favProducts = products.filter(p => userFavorites.includes(p.id));
+        wc.innerHTML = favProducts.map(p => `
+          <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.8rem;">
+            <img src="${p.image}" style="width:50px; height:50px; object-fit:cover; border-radius:8px;" onerror="this.src='https://via.placeholder.com/50'">
+            <span style="flex:1;">${p.name}</span>
+            <span style="font-weight:700;">KES ${p.priceKES.toLocaleString()}</span>
+            <i class="fas fa-trash-alt" style="color:#c62828; cursor:pointer;" onclick="removeFavorite(${p.id})"></i>
+          </div>
+        `).join('');
       }
+    }
 
-      const blockchain = new Blockchain();
+    window.removeFavorite = function(productId) {
+      toggleFavorite(productId);
+      updateWishlistUI();
+    };
 
-      // ==================== GLOBAL VARIABLES ====================
-      let products = [];
-      let cart = [];
-      let currentCategory = 'all';
-      let searchTerm = '';
+    // ==================== PRODUCT LOADING ====================
+    async function loadProducts() {
+      try {
+        const res = await fetch('products.json');
+        if (!res.ok) throw new Error('Failed to load');
+        products = await res.json();
+        populateCategories();
+        renderProducts();
+        updateCartUI();
+        document.querySelector('.sidebar li[data-category="all"]').style.fontWeight = 'bold';
+      } catch(e) {
+        document.getElementById('productGrid').innerHTML = '<p style="color:red;">Error loading products.</p>';
+      }
+    }
 
-      // ==================== PRODUCT LOADING ====================
-      async function loadProducts() {
-        try {
-          const res = await fetch('products.json');
-          if (!res.ok) throw new Error('Failed to load products.json');
-          products = await res.json();
-          populateCategories();
+    function populateCategories() {
+      const cats = [...new Set(products.map(p => p.category))];
+      let html = '<li data-category="all"><i class="fas fa-th-large"></i> All</li>';
+      cats.forEach(c => html += `<li data-category="${c}"><i class="fas fa-tag"></i> ${c}</li>`);
+      document.getElementById('categoryList').innerHTML = html;
+      document.querySelectorAll('.sidebar li[data-category]').forEach(item => {
+        item.addEventListener('click', function() {
+          document.querySelectorAll('.sidebar li[data-category]').forEach(li => li.style.fontWeight='normal');
+          this.style.fontWeight='bold';
+          currentCategory = this.getAttribute('data-category');
           renderProducts();
-          updateCartUI();
-          document.querySelector('.sidebar li[data-category="all"]').style.fontWeight = 'bold';
-        } catch (e) {
-          document.getElementById('productGrid').innerHTML = '<p style="color:red;">Error loading products. Please ensure products.json exists.</p>';
-        }
-      }
-
-      function populateCategories() {
-        const cats = [...new Set(products.map(p => p.category))];
-        let html = '<li data-category="all"><i class="fas fa-th-large"></i> All</li>';
-        cats.forEach(c => html += `<li data-category="${c}"><i class="fas fa-tag"></i> ${c}</li>`);
-        document.getElementById('categoryList').innerHTML = html;
-        document.querySelectorAll('.sidebar li[data-category]').forEach(item => {
-          item.addEventListener('click', function() {
-            document.querySelectorAll('.sidebar li[data-category]').forEach(li => li.style.fontWeight = 'normal');
-            this.style.fontWeight = 'bold';
-            currentCategory = this.getAttribute('data-category');
-            renderProducts();
-          });
         });
-      }
+      });
+    }
 
-      function renderProducts() {
-        const filtered = products.filter(p => {
-          const mc = currentCategory === 'all' || p.category === currentCategory;
-          const ms = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-          return mc && ms;
-        });
-        document.getElementById('productGrid').innerHTML = filtered.map(p => `
+    function renderProducts() {
+      const filtered = products.filter(p => {
+        const mc = currentCategory === 'all' || p.category === currentCategory;
+        const ms = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+        return mc && ms;
+      });
+      document.getElementById('productGrid').innerHTML = filtered.map(p => {
+        const isFav = userFavorites.includes(p.id);
+        return `
           <div class="product-card">
             <div class="product-img">
               <img src="${p.image}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
               <i class="fas ${p.icon||'fa-box'} fallback-icon" style="display:none;"></i>
+              <div class="fav-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite(${p.id})">
+                <i class="${isFav ? 'fas' : 'far'} fa-heart"></i>
+              </div>
             </div>
             <div class="product-info">
               <div class="product-name" title="${p.name}">${p.name}</div>
@@ -344,135 +460,194 @@
                 <i class="fas fa-cart-plus"></i> Add to Cart
               </button>
             </div>
-          </div>
-        `).join('');
-        document.querySelectorAll('.add-to-cart').forEach(btn => {
-          btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            addToCart(parseInt(this.getAttribute('data-id')));
-          });
+          </div>`;
+      }).join('');
+      document.querySelectorAll('.add-to-cart').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          addToCart(parseInt(this.getAttribute('data-id')));
+        });
+      });
+    }
+
+    async function addToCart(productId) {
+      const existing = cart.find(i => i.id === productId);
+      if (existing) existing.quantity++;
+      else { const p = products.find(pp => pp.id === productId); if (p) cart.push({...p, quantity:1}); }
+      updateCartUI();
+      openModal('cartModal');
+      const p = products.find(pp => pp.id === productId);
+      await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name });
+    }
+
+    function removeFromCart(productId) { cart = cart.filter(i => i.id !== productId); updateCartUI(); }
+
+    function updateCartUI() {
+      const totalItems = cart.reduce((s,i)=>s+i.quantity,0);
+      document.getElementById('cartCount').textContent = totalItems;
+      const list = document.getElementById('cartItemsList');
+      const tot = document.getElementById('cartTotal');
+      if (cart.length === 0) {
+        list.innerHTML = '<li style="justify-content:center;color:#666;">Your cart is empty</li>';
+        tot.textContent = 'Total: KES 0.00';
+      } else {
+        list.innerHTML = cart.map(item => `
+          <li>
+            <span>${item.name} (x${item.quantity})</span>
+            <span>KES ${(item.priceKES*item.quantity).toLocaleString()}
+              <i class="fas fa-trash-alt" style="color:#c62828;cursor:pointer;margin-left:0.5rem;" data-remove="${item.id}"></i>
+            </span>
+          </li>`).join('');
+        const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
+        tot.textContent = `Total: KES ${total.toLocaleString()}`;
+        document.querySelectorAll('.fa-trash-alt[data-remove]').forEach(icon => {
+          icon.addEventListener('click', function() { removeFromCart(parseInt(this.getAttribute('data-remove'))); });
         });
       }
+    }
 
-      async function addToCart(productId) {
-        const existing = cart.find(i => i.id === productId);
-        if (existing) {
-          existing.quantity++;
-        } else {
-          const p = products.find(pp => pp.id === productId);
-          if (p) cart.push({...p, quantity: 1});
-        }
-        updateCartUI();
-        openModal('cartModal');
-        const p = products.find(pp => pp.id === productId);
-        await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name, quantity: existing ? existing.quantity : 1 });
+    // ==================== MODALS ====================
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    // Cart modal
+    document.getElementById('cartIcon').addEventListener('click', ()=>openModal('cartModal'));
+    document.getElementById('closeCartBtn').addEventListener('click', ()=>closeModal('cartModal'));
+
+    // Blockchain modal
+    document.getElementById('blockchainIcon').addEventListener('click', async ()=>{
+      await blockchain.ready;
+      document.getElementById('blockchainContent').innerHTML = blockchain.getChainHTML();
+      openModal('blockchainModal');
+    });
+    document.getElementById('closeBlockchainBtn').addEventListener('click', ()=>closeModal('blockchainModal'));
+    document.getElementById('validateChainBtn').addEventListener('click', ()=>{
+      alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌'));
+    });
+
+    // Info modal
+    window.openInfoModal = function(title, content) {
+      document.getElementById('infoModalTitle').textContent = title;
+      document.getElementById('infoModalContent').innerHTML = content;
+      openModal('infoModal');
+    };
+    document.getElementById('closeInfoBtn').addEventListener('click', ()=>closeModal('infoModal'));
+
+    // ==================== AUTH MODALS ====================
+    document.getElementById('userIcon').addEventListener('click', () => {
+      if (auth.currentUser) {
+        // Show profile
+        const user = auth.currentUser;
+        document.getElementById('profileContent').innerHTML = `
+          <p><strong>Name:</strong> ${user.displayName || 'Not set'}</p>
+          <p><strong>Email:</strong> ${user.email}</p>
+          <p><strong>Favorites:</strong> ${userFavorites.length} product(s)</p>`;
+        openModal('profileModal');
+      } else {
+        openModal('loginModal');
       }
+    });
 
-      function removeFromCart(productId) {
-        cart = cart.filter(i => i.id !== productId);
-        updateCartUI();
+    document.getElementById('closeLoginBtn').addEventListener('click', ()=>closeModal('loginModal'));
+    document.getElementById('closeSignupBtn').addEventListener('click', ()=>closeModal('signupModal'));
+    document.getElementById('closeProfileBtn').addEventListener('click', ()=>closeModal('profileModal'));
+
+    document.getElementById('showSignup').addEventListener('click', ()=>{
+      closeModal('loginModal');
+      openModal('signupModal');
+    });
+    document.getElementById('showLogin').addEventListener('click', ()=>{
+      closeModal('signupModal');
+      openModal('loginModal');
+    });
+
+    document.getElementById('signupBtn').addEventListener('click', async ()=>{
+      const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value.trim();
+      const password = document.getElementById('signupPassword').value;
+      try {
+        const cred = await auth.createUserWithEmailAndPassword(email, password);
+        await cred.user.updateProfile({ displayName: name });
+        closeModal('signupModal');
+        alert('Account created!');
+      } catch (e) {
+        alert('Signup failed: ' + e.message);
       }
+    });
 
-      function updateCartUI() {
-        const totalItems = cart.reduce((s,i) => s + i.quantity, 0);
-        document.getElementById('cartCount').textContent = totalItems;
-        const list = document.getElementById('cartItemsList');
-        const tot = document.getElementById('cartTotal');
-        if (cart.length === 0) {
-          list.innerHTML = '<li style="justify-content:center;color:#666;">Your cart is empty</li>';
-          tot.textContent = 'Total: KES 0.00';
-        } else {
-          list.innerHTML = cart.map(item => `
-            <li>
-              <span>${item.name} (x${item.quantity})</span>
-              <span>KES ${(item.priceKES * item.quantity).toLocaleString()}
-                <i class="fas fa-trash-alt" style="color:#c62828;cursor:pointer;margin-left:0.5rem;" data-remove="${item.id}"></i>
-              </span>
-            </li>
-          `).join('');
-          const total = cart.reduce((s,i) => s + (i.priceKES * i.quantity), 0);
-          tot.textContent = `Total: KES ${total.toLocaleString()}`;
-          document.querySelectorAll('.fa-trash-alt[data-remove]').forEach(icon => {
-            icon.addEventListener('click', function() { removeFromCart(parseInt(this.getAttribute('data-remove'))); });
-          });
-        }
+    document.getElementById('loginBtn').addEventListener('click', async ()=>{
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+        closeModal('loginModal');
+      } catch (e) {
+        alert('Login failed: ' + e.message);
       }
+    });
 
-      // ==================== MODALS ====================
-      function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-      function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    document.getElementById('logoutBtn').addEventListener('click', ()=>{
+      auth.signOut();
+      closeModal('profileModal');
+    });
 
-      document.getElementById('cartIcon').addEventListener('click', () => openModal('cartModal'));
-      document.getElementById('closeCartBtn').addEventListener('click', () => closeModal('cartModal'));
-      window.addEventListener('click', e => { if(e.target.classList.contains('modal-overlay')) e.target.style.display = 'none'; });
+    // Wishlist modal
+    document.getElementById('wishlistIcon').addEventListener('click', ()=>{
+      updateWishlistUI();
+      openModal('wishlistModal');
+    });
+    document.getElementById('closeWishlistBtn').addEventListener('click', ()=>closeModal('wishlistModal'));
 
-      // Blockchain modal
-      document.getElementById('blockchainIcon').addEventListener('click', async () => {
-        await blockchain.ready;
-        document.getElementById('blockchainContent').innerHTML = blockchain.getChainHTML();
-        openModal('blockchainModal');
-      });
-      document.getElementById('closeBlockchainBtn').addEventListener('click', () => closeModal('blockchainModal'));
-      document.getElementById('validateChainBtn').addEventListener('click', () => {
-        alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌'));
-      });
+    // ==================== SEARCH ====================
+    document.getElementById('searchBtn').addEventListener('click',()=>{ searchTerm=document.getElementById('searchInput').value.trim(); renderProducts(); });
+    document.getElementById('searchInput').addEventListener('keypress',e=>{ if(e.key==='Enter'){ searchTerm=e.target.value.trim(); renderProducts(); } });
 
-      // Info modal (for footer)
-      window.openInfoModal = function(title, content) {
-        document.getElementById('infoModalTitle').textContent = title;
-        document.getElementById('infoModalContent').innerHTML = content;
-        openModal('infoModal');
-      };
-      document.getElementById('closeInfoBtn').addEventListener('click', () => closeModal('infoModal'));
+    // ==================== CHAT ====================
+    const chatToggle = document.getElementById('chatToggle');
+    const chatWindow = document.getElementById('chatWindow');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const sendChatBtn = document.getElementById('sendChatBtn');
 
-      // ==================== SEARCH ====================
-      document.getElementById('searchBtn').addEventListener('click', () => { searchTerm = document.getElementById('searchInput').value.trim(); renderProducts(); });
-      document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') { searchTerm = e.target.value.trim(); renderProducts(); } });
+    chatToggle.addEventListener('click', ()=>{ chatWindow.style.display = chatWindow.style.display==='flex'?'none':'flex'; });
 
-      // ==================== CHAT (Groq with short replies) ====================
-      const chatToggle = document.getElementById('chatToggle');
-      const chatWindow = document.getElementById('chatWindow');
-      const chatMessages = document.getElementById('chatMessages');
-      const chatInput = document.getElementById('chatInput');
-      const sendChatBtn = document.getElementById('sendChatBtn');
-
-      chatToggle.addEventListener('click', () => { chatWindow.style.display = chatWindow.style.display === 'flex' ? 'none' : 'flex'; });
-
-      async function sendToAI(userMsg) {
-        chatMessages.innerHTML += `<p><strong>You:</strong> ${userMsg}</p>`;
-        chatInput.value = '';
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-        const typingId = 'typing-' + Date.now();
-        chatMessages.innerHTML += `<p id="${typingId}"><em>AI is thinking...</em></p>`;
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        try {
-          const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: userMsg, products })
-          });
-          const data = await response.json();
-          document.getElementById(typingId).remove();
-          chatMessages.innerHTML += `<p><strong>AI:</strong> ${data.reply || 'Sorry, no reply.'}</p>`;
-        } catch (err) {
-          document.getElementById(typingId).remove();
-          chatMessages.innerHTML += `<p><strong>AI:</strong> Sorry, the assistant is unavailable right now.</p>`;
-        }
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+    async function sendToAI(msg) {
+      chatMessages.innerHTML += `<p><strong>You:</strong> ${msg}</p>`;
+      chatInput.value = '';
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      const typingId = 'typing-'+Date.now();
+      chatMessages.innerHTML += `<p id="${typingId}"><em>AI is thinking...</em></p>`;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      try {
+        const res = await fetch('/api/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ message: msg, products })
+        });
+        const data = await res.json();
+        document.getElementById(typingId).remove();
+        chatMessages.innerHTML += `<p><strong>AI:</strong> ${data.reply || 'Sorry, no reply.'}</p>`;
+      } catch(e) {
+        document.getElementById(typingId).remove();
+        chatMessages.innerHTML += `<p><strong>AI:</strong> Sorry, unavailable.</p>`;
       }
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 
-      sendChatBtn.addEventListener('click', () => {
-        const msg = chatInput.value.trim();
-        if (!msg) return;
-        sendToAI(msg);
-      });
+    sendChatBtn.addEventListener('click', ()=>{
+      const msg = chatInput.value.trim();
+      if(!msg) return;
+      sendToAI(msg);
+    });
+    chatInput.addEventListener('keypress', e => { if(e.key==='Enter') sendChatBtn.click(); });
 
-      chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendChatBtn.click(); });
+    // Close modals on overlay click
+    window.addEventListener('click', e => {
+      if(e.target.classList.contains('modal-overlay')) e.target.style.display='none';
+    });
 
-      // Start everything
-      loadProducts();
-    })();
+    // Start
+    loadProducts();
   </script>
 </body>
 </html>
