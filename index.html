@@ -82,6 +82,27 @@
 
     .payment-methods { display: flex; gap: 1rem; justify-content: center; margin: 1rem 0; font-size: 2rem; color: #2e7d32; }
 
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #2e7d32;
+      color: white;
+      padding: 0.8rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 2000;
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
     /* Footer */
     .footer { background: #a5d6a7; text-align: center; padding: 1.5rem 1rem; margin-top: auto; color: #000; font-size: 0.95rem; border-top: 2px solid #81c784; }
     .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem; margin-bottom: 0.8rem; }
@@ -140,6 +161,9 @@
       <div class="product-grid" id="productGrid">Loading products...</div>
     </main>
   </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
 
   <!-- Login Modal -->
   <div class="modal-overlay" id="loginModal">
@@ -366,6 +390,14 @@
     let searchTerm = '';
     let userFavorites = [];
 
+    // Toast notification helper
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => { toast.classList.remove('show'); }, 1500);
+    }
+
     // ==================== AUTH / WISHLIST SETUP ====================
     function setupAuthObserver() {
       auth.onAuthStateChanged(user => {
@@ -517,11 +549,16 @@
 
     async function addToCart(productId) {
       const existing = cart.find(i => i.id === productId);
-      if (existing) existing.quantity++;
-      else { const p = products.find(pp => pp.id === productId); if (p) cart.push({...p, quantity:1}); }
+      if (existing) {
+        existing.quantity++;
+      } else {
+        const p = products.find(pp => pp.id === productId);
+        if (p) cart.push({...p, quantity:1});
+      }
       updateCartUI();
-      openModal('cartModal');
+      // NO modal – just a toast notification
       const p = products.find(pp => pp.id === productId);
+      showToast(`${p.name} added to cart ✅`);
       await blockchain.addBlock({ type: 'cart_add', productId, productName: p.name });
     }
 
@@ -659,7 +696,6 @@
       openModal('cartModal');
     });
 
-    // ✅ Your IntaSend test key
     const intaSendPublicKey = 'ISPubKey_test_1f181f79-b7ab-42a9-9e5d-a7f25f1438bf';
 
     document.getElementById('payNowBtn').addEventListener('click', () => {
@@ -674,7 +710,6 @@
 
       const total = cart.reduce((sum, item) => sum + item.priceKES * item.quantity, 0);
 
-      // Use IntaSend directly without hidden button
       if (!window.IntaSend) {
         alert('Payment system not loaded. Please refresh the page.');
         return;
@@ -682,7 +717,7 @@
 
       const intaSendInstance = new window.IntaSend({
         publicAPIKey: intaSendPublicKey,
-        live: false // set to true for production
+        live: false
       });
 
       intaSendInstance
@@ -696,12 +731,9 @@
           comment: `ElectroHub order for ${cart.length} items`
         })
         .on('COMPLETE', (results) => {
-          // Record on blockchain
           blockchain.addBlock({ type: 'payment', txId: results.id, amount: total, customer: { name, email, phone } });
-          // Clear cart
           cart = [];
           updateCartUI();
-          // Show success
           document.getElementById('checkoutForm').style.display = 'none';
           document.getElementById('paymentSuccess').style.display = 'block';
           document.getElementById('paymentError').style.display = 'none';
