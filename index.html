@@ -8,6 +8,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <!-- IntaSend Inline SDK -->
+  <script src="https://unpkg.com/intasend-inlinejs-sdk@4.0.7/build/intasend-inline.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -78,6 +80,8 @@
     .cart-items li { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #ddd; }
     .cart-total { font-weight: 700; margin-bottom: 1rem; text-align: right; font-size: 1.1rem; }
 
+    .payment-methods { display: flex; gap: 1rem; justify-content: center; margin: 1rem 0; font-size: 2rem; color: #2e7d32; }
+
     /* Footer */
     .footer { background: #a5d6a7; text-align: center; padding: 1.5rem 1rem; margin-top: auto; color: #000; font-size: 0.95rem; border-top: 2px solid #81c784; }
     .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem; margin-bottom: 0.8rem; }
@@ -105,6 +109,9 @@
   </style>
 </head>
 <body>
+  <!-- Hidden IntaSend trigger button -->
+  <button id="intaSendBtn" class="intaSendPayButton" style="display:none;">Pay</button>
+
   <header class="top-bar">
     <div class="logo"><i class="fas fa-bolt"></i> ElectroHub <span class="blockchain-badge">BLOCKCHAIN</span></div>
     <div class="search-section">
@@ -188,6 +195,44 @@
       <ul class="cart-items" id="cartItemsList"></ul>
       <div class="cart-total" id="cartTotal">Total: KES 0.00</div>
       <button class="close-btn" id="closeCartBtn">Close</button>
+      <button class="auth-btn" id="goToCheckoutBtn" style="margin-top:0.5rem;">
+        <i class="fas fa-lock"></i> Proceed to Checkout
+      </button>
+    </div>
+  </div>
+
+  <!-- Checkout Modal -->
+  <div class="modal-overlay" id="checkoutModal">
+    <div class="modal-box">
+      <h2><i class="fas fa-lock"></i> Secure Checkout</h2>
+      <div id="checkoutForm">
+        <div class="form-group"><label>Full Name *</label><input type="text" id="custName" placeholder="e.g. John Doe" /></div>
+        <div class="form-group"><label>Email Address *</label><input type="email" id="custEmail" placeholder="e.g. john@example.com" /></div>
+        <div class="form-group"><label>Phone Number *</label><input type="tel" id="custPhone" placeholder="e.g. 0712345678" /></div>
+        <div class="cart-total" id="checkoutTotal">Total: KES 0.00</div>
+        <div class="payment-methods">
+          <i class="fab fa-cc-visa" title="Visa"></i>
+          <i class="fab fa-cc-mastercard" title="Mastercard"></i>
+          <i class="fas fa-mobile-alt" title="M-Pesa"></i>
+        </div>
+        <button class="auth-btn" id="payNowBtn">
+          <i class="fas fa-credit-card"></i> Pay with IntaSend
+        </button>
+        <button class="close-btn" id="closeCheckoutBtn" style="margin-top:0.5rem; width:100%;">Back to Cart</button>
+      </div>
+      <div id="paymentSuccess" class="success-message" style="display:none; text-align:center; padding:2rem;">
+        <i class="fas fa-check-circle" style="font-size:4rem; color:#2e7d32;"></i>
+        <h2>Payment Successful!</h2>
+        <p>Thank you for your purchase. A receipt has been sent to your email.</p>
+        <p><strong>Transaction ID:</strong> <span id="txnId"></span></p>
+        <button class="auth-btn" id="continueShoppingBtn" style="margin-top:1rem;">Continue Shopping</button>
+      </div>
+      <div id="paymentError" class="error-message" style="display:none; text-align:center; padding:2rem;">
+        <i class="fas fa-times-circle" style="font-size:4rem; color:#c62828;"></i>
+        <h2>Payment Failed</h2>
+        <p id="errorMsg">Something went wrong. Please try again.</p>
+        <button class="auth-btn" id="retryPaymentBtn" style="margin-top:1rem;">Try Again</button>
+      </div>
     </div>
   </div>
 
@@ -236,7 +281,7 @@
   </footer>
 
   <script>
-    // ==================== FIREBASE CONFIG (fetched dynamically via API) ====================
+    // ==================== FIREBASE CONFIG (fetched dynamically) ====================
     let auth, db;
     let firebaseReady = false;
 
@@ -384,7 +429,6 @@
       } else {
         countSpan.style.display = 'none';
       }
-
       const wc = document.getElementById('wishlistContent');
       if (userFavorites.length === 0) {
         wc.innerHTML = '<p>No favorite products yet. Click the ❤️ on any product to save it here.</p>';
@@ -596,6 +640,95 @@
       openModal('wishlistModal');
     });
     document.getElementById('closeWishlistBtn').addEventListener('click', ()=>closeModal('wishlistModal'));
+
+    // ==================== CHECKOUT & PAYMENT ====================
+    const checkoutModal = document.getElementById('checkoutModal');
+    document.getElementById('goToCheckoutBtn').addEventListener('click', () => {
+      if (cart.length === 0) {
+        alert('Your cart is empty!');
+        return;
+      }
+      closeModal('cartModal');
+      const total = cart.reduce((sum, item) => sum + item.priceKES * item.quantity, 0);
+      document.getElementById('checkoutTotal').textContent = `Total: KES ${total.toLocaleString()}`;
+      document.getElementById('checkoutForm').style.display = 'block';
+      document.getElementById('paymentSuccess').style.display = 'none';
+      document.getElementById('paymentError').style.display = 'none';
+      openModal('checkoutModal');
+    });
+
+    document.getElementById('closeCheckoutBtn').addEventListener('click', () => {
+      closeModal('checkoutModal');
+      openModal('cartModal');
+    });
+
+    const intaSendPublicKey = 'ISPubKey_test_xxxxxxxxxxxxxxxxxxxx'; // REPLACE WITH YOUR TEST KEY
+
+    document.getElementById('payNowBtn').addEventListener('click', () => {
+      const name = document.getElementById('custName').value.trim();
+      const email = document.getElementById('custEmail').value.trim();
+      const phone = document.getElementById('custPhone').value.trim();
+
+      if (!name || !email || !phone) {
+        alert('Please fill in all fields (name, email, phone number).');
+        return;
+      }
+
+      const total = cart.reduce((sum, item) => sum + item.priceKES * item.quantity, 0);
+      const hiddenBtn = document.getElementById('intaSendBtn');
+
+      // Set data attributes
+      hiddenBtn.setAttribute('data-amount', total);
+      hiddenBtn.setAttribute('data-currency', 'KES');
+      hiddenBtn.setAttribute('data-email', email);
+      hiddenBtn.setAttribute('data-phone_number', phone);
+      hiddenBtn.setAttribute('data-name', name);
+      hiddenBtn.setAttribute('data-comment', `ElectroHub order for ${cart.length} items`);
+
+      // Init IntaSend
+      if (window.IntaSend && window.IntaSend.init) {
+        window.IntaSend.init({
+          publicAPIKey: intaSendPublicKey,
+          live: false  // true for production
+        });
+      }
+
+      // Setup callbacks
+      if (window.IntaSend && window.IntaSend.on) {
+        window.IntaSend.on("COMPLETE", (results) => {
+          // Record on blockchain
+          blockchain.addBlock({ type: 'payment', txId: results.id, amount: total, customer: { name, email, phone } });
+          // Clear cart
+          cart = [];
+          updateCartUI();
+          // Show success
+          document.getElementById('checkoutForm').style.display = 'none';
+          document.getElementById('paymentSuccess').style.display = 'block';
+          document.getElementById('paymentError').style.display = 'none';
+          document.getElementById('txnId').textContent = results.id;
+        })
+        .on("FAILED", (results) => {
+          document.getElementById('checkoutForm').style.display = 'none';
+          document.getElementById('paymentSuccess').style.display = 'none';
+          document.getElementById('paymentError').style.display = 'block';
+          document.getElementById('errorMsg').textContent = 'Payment failed: ' + (results.error || 'Unknown error.');
+        })
+        .on("CANCELLED", () => {
+          // Do nothing, user can try again
+        });
+      }
+
+      hiddenBtn.click();
+    });
+
+    document.getElementById('continueShoppingBtn').addEventListener('click', () => {
+      closeModal('checkoutModal');
+      renderProducts();
+    });
+    document.getElementById('retryPaymentBtn').addEventListener('click', () => {
+      document.getElementById('checkoutForm').style.display = 'block';
+      document.getElementById('paymentError').style.display = 'none';
+    });
 
     // ==================== SEARCH ====================
     document.getElementById('searchBtn').addEventListener('click',()=>{ searchTerm=document.getElementById('searchInput').value.trim(); renderProducts(); });
