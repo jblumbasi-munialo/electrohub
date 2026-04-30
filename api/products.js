@@ -1,12 +1,11 @@
 // api/products.js
-import pkg from 'pg';
-const { Pool } = pkg;
+const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     // Create table if not exists
     await pool.query(`
@@ -14,7 +13,7 @@ export default async function handler(req, res) {
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         category TEXT NOT NULL,
-        priceKES INTEGER NOT NULL,
+        "priceKES" INTEGER NOT NULL,
         image TEXT NOT NULL,
         icon TEXT DEFAULT 'fa-box',
         rating REAL DEFAULT 4.5,
@@ -23,8 +22,8 @@ export default async function handler(req, res) {
     `);
 
     // Seed initial data only once (if table is empty)
-    const { rows: countRows } = await pool.query('SELECT COUNT(*)::int AS count FROM products');
-    if (countRows[0].count === 0) {
+    const countResult = await pool.query('SELECT COUNT(*)::int AS count FROM products');
+    if (countResult.rows[0].count === 0) {
       const defaultProducts = [
         { name: 'iPhone 15 Pro Max', category: 'Smartphone', priceKES: 179999, image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=400&q=80', icon: 'fa-mobile-alt', rating: 4.8 },
         { name: 'Samsung Galaxy S24 Ultra', category: 'Smartphone', priceKES: 164999, image: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=400&q=80', icon: 'fa-mobile-alt', rating: 4.7 },
@@ -41,7 +40,7 @@ export default async function handler(req, res) {
       ];
       for (const p of defaultProducts) {
         await pool.query(
-          'INSERT INTO products (name, category, priceKES, image, icon, rating) VALUES ($1, $2, $3, $4, $5, $6)',
+          'INSERT INTO products (name, category, "priceKES", image, icon, rating) VALUES ($1, $2, $3, $4, $5, $6)',
           [p.name, p.category, p.priceKES, p.image, p.icon, p.rating]
         );
       }
@@ -49,8 +48,8 @@ export default async function handler(req, res) {
 
     // GET request – return all products
     if (req.method === 'GET') {
-      const { rows } = await pool.query('SELECT * FROM products ORDER BY id');
-      return res.status(200).json(rows);
+      const result = await pool.query('SELECT * FROM products ORDER BY id');
+      return res.status(200).json(result.rows);
     }
 
     // POST request – add new product (admin only)
@@ -63,16 +62,16 @@ export default async function handler(req, res) {
       if (!name || !category || !priceKES || !image) {
         return res.status(400).json({ error: 'Missing required fields: name, category, priceKES, image' });
       }
-      const { rows: newRows } = await pool.query(
-        'INSERT INTO products (name, category, priceKES, image, icon, rating, supplier) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      const result = await pool.query(
+        'INSERT INTO products (name, category, "priceKES", image, icon, rating, supplier) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
         [name, category, priceKES, image, icon || 'fa-box', rating || 4.5, supplier || '']
       );
-      return res.status(201).json(newRows[0]);
+      return res.status(201).json(result.rows[0]);
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('API error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
-}
+};
