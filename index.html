@@ -162,7 +162,7 @@
     </div>
   </div>
 
-  <!-- Profile Modal (enhanced with mandatory phone) -->
+  <!-- Profile Modal -->
   <div class="modal-overlay" id="profileModal">
     <div class="modal-box">
       <h2>Your Profile</h2>
@@ -172,9 +172,19 @@
         <div class="form-group"><label>Street Address</label><input type="text" id="profileStreet" placeholder="e.g. Moi Avenue, Nairobi" /></div>
         <div class="form-group"><label>City</label><input type="text" id="profileCity" placeholder="e.g. Nairobi" /></div>
         <button class="auth-btn" id="saveProfileBtn">Save Profile</button>
+        <button class="auth-btn" id="viewOrdersBtn" style="background:#2e7d32; margin-top:0.5rem;">📋 View My Orders</button>
       </div>
       <button class="auth-btn" id="logoutBtn" style="background:#c62828; margin-top:0.8rem;">Logout</button>
       <button class="close-btn" id="closeProfileBtn" style="margin-top:0.5rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Orders Modal -->
+  <div class="modal-overlay" id="ordersModal">
+    <div class="modal-box">
+      <h2>Your Orders</h2>
+      <div id="ordersContent" style="max-height:400px; overflow-y:auto;">Loading...</div>
+      <button class="close-btn" id="closeOrdersBtn" style="margin-top:0.8rem;">Close</button>
     </div>
   </div>
 
@@ -193,7 +203,8 @@
       <h2>Your Cart</h2>
       <ul class="cart-items" id="cartItemsList"></ul>
       <div class="cart-total" id="cartTotal">Total: KES 0.00</div>
-      <button class="close-btn" id="closeCartBtn">Close</button>
+      <button class="close-btn" id="closeCartBtn" style="margin-right:0.5rem;">Close</button>
+      <button class="auth-btn" id="placeOrderBtn" style="width:auto; display:inline-block; padding:0.6rem 1.8rem;">Place Order</button>
     </div>
   </div>
 
@@ -484,6 +495,7 @@
       if (cart.length === 0) {
         list.innerHTML = '<li style="justify-content:center;color:#666;">Your cart is empty</li>';
         tot.textContent = 'Total: KES 0.00';
+        document.getElementById('placeOrderBtn').disabled = true;
       } else {
         list.innerHTML = cart.map(item => `
           <li>
@@ -494,6 +506,7 @@
           </li>`).join('');
         const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
         tot.textContent = `Total: KES ${total.toLocaleString()}`;
+        document.getElementById('placeOrderBtn').disabled = false;
         document.querySelectorAll('.fa-trash-alt[data-remove]').forEach(icon => {
           icon.addEventListener('click', function() { removeFromCart(parseInt(this.getAttribute('data-remove'))); });
         });
@@ -528,7 +541,6 @@
     document.getElementById('userIcon').addEventListener('click', () => {
       if (auth && auth.currentUser) {
         const user = auth.currentUser;
-        // Load existing profile data
         db.collection('users').doc(user.uid).get().then(doc => {
           const data = doc.exists ? doc.data() : {};
           document.getElementById('profileName').value = user.displayName || data.name || '';
@@ -589,12 +601,10 @@
       const street = document.getElementById('profileStreet').value.trim();
       const city = document.getElementById('profileCity').value.trim();
 
-      // Phone number is mandatory for delivery
       if (!phone) {
         alert('Phone number is required for delivery. Please enter a valid Kenyan phone number.');
         return;
       }
-      // Basic Kenyan phone format check (07xx or +2547xx)
       if (!/^(\+254|0)\d{9}$/.test(phone.replace(/\s/g, ''))) {
         alert('Please enter a valid phone number (e.g. 0712345678 or +254712345678).');
         return;
@@ -618,6 +628,91 @@
       closeModal('profileModal');
     });
 
+    // ==================== ORDERS ====================
+    // View orders button in profile
+    document.getElementById('viewOrdersBtn').addEventListener('click', async () => {
+      if (!auth.currentUser) return;
+      const user = auth.currentUser;
+      const ordersSnapshot = await db.collection('users').doc(user.uid).collection('orders')
+        .orderBy('timestamp', 'desc')
+        .get();
+      const ordersContent = document.getElementById('ordersContent');
+      if (ordersSnapshot.empty) {
+        ordersContent.innerHTML = '<p>No orders yet.</p>';
+      } else {
+        let html = '';
+        ordersSnapshot.forEach(doc => {
+          const order = doc.data();
+          html += `
+            <div style="border:1px solid #c8e6c9; border-radius:8px; padding:0.8rem; margin-bottom:0.8rem;">
+              <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                <span>Order #${doc.id.substring(0,6)}</span>
+                <span>${new Date(order.timestamp).toLocaleDateString()}</span>
+              </div>
+              <div style="margin-top:0.3rem;">Total: KES ${order.totalKES.toLocaleString()}</div>
+              <div style="color:#2e7d32; font-weight:600;">Status: ${order.status || 'pending'}</div>
+              <details style="margin-top:0.3rem;">
+                <summary style="cursor:pointer; color:#1b5e20;">Items (${order.items.length})</summary>
+                ${order.items.map(item => `<div style="padding-left:1rem;">${item.name} x${item.quantity} - KES ${(item.priceKES*item.quantity).toLocaleString()}</div>`).join('')}
+              </details>
+            </div>`;
+        });
+        ordersContent.innerHTML = html;
+      }
+      openModal('ordersModal');
+    });
+    document.getElementById('closeOrdersBtn').addEventListener('click', ()=>closeModal('ordersModal'));
+
+    // Place order button
+    document.getElementById('placeOrderBtn').addEventListener('click', async () => {
+      if (!auth.currentUser) {
+        alert('Please log in to place an order.');
+        return;
+      }
+      if (cart.length === 0) return;
+
+      // Check if user has phone number
+      const userDoc = await db.collection('users').doc(auth.currentUser.uid).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+      if (!userData.phone) {
+        alert('Please update your profile with a valid phone number before placing an order. It is required for delivery.');
+        closeModal('cartModal');
+        // open profile modal
+        document.getElementById('profileName').value = auth.currentUser.displayName || '';
+        document.getElementById('profilePhone').value = userData.phone || '';
+        document.getElementById('profileStreet').value = userData.street || '';
+        document.getElementById('profileCity').value = userData.city || '';
+        openModal('profileModal');
+        return;
+      }
+
+      const total = cart.reduce((s,i)=>s+(i.priceKES*i.quantity),0);
+      const orderData = {
+        items: cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          priceKES: item.priceKES,
+          quantity: item.quantity
+        })),
+        totalKES: total,
+        timestamp: new Date().toISOString(),
+        status: 'pending'
+      };
+
+      try {
+        await db.collection('users').doc(auth.currentUser.uid).collection('orders').add(orderData);
+        // Record on blockchain
+        await blockchain.addBlock({ type: 'order_placed', itemsCount: cart.length, totalKES: total });
+        alert('Order placed successfully!');
+        cart = [];
+        updateCartUI();
+        closeModal('cartModal');
+      } catch (e) {
+        alert('Failed to place order: ' + e.message);
+      }
+    });
+
+    // Wishlist modal
     document.getElementById('wishlistIcon').addEventListener('click', ()=>{
       updateWishlistUI();
       openModal('wishlistModal');
