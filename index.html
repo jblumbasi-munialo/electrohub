@@ -237,21 +237,33 @@
   </footer>
 
   <script>
-    // ==================== FIREBASE CONFIG ====================
-    const firebaseConfig = {
-      apiKey: "AIzaSyBPdBYIVg6k_9SOGuZYz-FV091nLdMgNbM",
-      authDomain: "electrohub-kenya.firebaseapp.com",
-      projectId: "electrohub-kenya",
-      storageBucket: "electrohub-kenya.firebasestorage.app",
-      messagingSenderId: "256960919112",
-      appId: "1:256960919112:web:7adc2189cb1be0f468ca7d"
-    };
+  // ==================== FIREBASE CONFIG (fetched dynamically) ====================
+let auth, db;
+let firebaseReady = false;
 
-    // Initialize Firebase
+async function initializeFirebase() {
+  try {
+    const response = await fetch('/api/config');
+    const firebaseConfig = await response.json();
+    if (!firebaseConfig.apiKey) throw new Error('Invalid config');
     firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+    auth = firebase.auth();
+    db = firebase.firestore();
+    firebaseReady = true;
+    // Now that we're ready, set up auth observer and load products
+    setupAuthObserver();
+    loadProducts();
+  } catch (error) {
+    console.error('Failed to load Firebase config:', error);
+    // Show a friendly message if Firebase is down, but still load products (without auth features)
+    document.getElementById('productGrid').innerHTML = '<p style="color:red;">Could not connect to user services. Some features may be unavailable.</p>';
+    // We'll still load products but without user-specific features
+    loadProducts();
+  }
+}
 
+// We'll move the auth observer and wishlist logic into a dedicated setup function
+// and call it only when Firebase is ready.
     // ==================== SIMPLE BLOCKCHAIN ====================
     class Block {
       constructor(index, timestamp, data, previousHash = '') {
@@ -642,7 +654,8 @@
     });
 
     // Start
-    loadProducts();
+    // Start everything
+initializeFirebase();
   </script>
 </body>
 </html>
