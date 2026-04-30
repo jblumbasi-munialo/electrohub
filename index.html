@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
   <title>ElectroHub • Buy & Sell Electronics</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
-  <!-- Firebase SDKs (Auth + Firestore) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -237,33 +236,28 @@
   </footer>
 
   <script>
-  // ==================== FIREBASE CONFIG (fetched dynamically) ====================
-let auth, db;
-let firebaseReady = false;
+    // ==================== FIREBASE CONFIG (fetched dynamically via API) ====================
+    let auth, db;
+    let firebaseReady = false;
 
-async function initializeFirebase() {
-  try {
-    const response = await fetch('/api/config');
-    const firebaseConfig = await response.json();
-    if (!firebaseConfig.apiKey) throw new Error('Invalid config');
-    firebase.initializeApp(firebaseConfig);
-    auth = firebase.auth();
-    db = firebase.firestore();
-    firebaseReady = true;
-    // Now that we're ready, set up auth observer and load products
-    setupAuthObserver();
-    loadProducts();
-  } catch (error) {
-    console.error('Failed to load Firebase config:', error);
-    // Show a friendly message if Firebase is down, but still load products (without auth features)
-    document.getElementById('productGrid').innerHTML = '<p style="color:red;">Could not connect to user services. Some features may be unavailable.</p>';
-    // We'll still load products but without user-specific features
-    loadProducts();
-  }
-}
+    async function initializeFirebase() {
+      try {
+        const response = await fetch('/api/config');
+        const firebaseConfig = await response.json();
+        if (!firebaseConfig.apiKey) throw new Error('Invalid config');
+        firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.firestore();
+        firebaseReady = true;
+        setupAuthObserver();
+        loadProducts();
+      } catch (error) {
+        console.error('Failed to load Firebase config:', error);
+        document.getElementById('productGrid').innerHTML = '<p style="color:red;">Could not connect to user services. Some features may be unavailable.</p>';
+        loadProducts();
+      }
+    }
 
-// We'll move the auth observer and wishlist logic into a dedicated setup function
-// and call it only when Firebase is ready.
     // ==================== SIMPLE BLOCKCHAIN ====================
     class Block {
       constructor(index, timestamp, data, previousHash = '') {
@@ -330,21 +324,23 @@ async function initializeFirebase() {
     let searchTerm = '';
     let userFavorites = [];
 
-    // Auth state observer
-    auth.onAuthStateChanged(user => {
-      if (user) {
-        document.getElementById('userIcon').className = 'fas fa-user-check';
-        document.getElementById('userIcon').style.color = '#2e7d32';
-        document.getElementById('userIcon').title = 'Profile (' + user.email + ')';
-        loadFavorites(user.uid);
-      } else {
-        document.getElementById('userIcon').className = 'far fa-user';
-        document.getElementById('userIcon').style.color = '';
-        document.getElementById('userIcon').title = 'Login / Profile';
-        userFavorites = [];
-        updateWishlistUI();
-      }
-    });
+    // ==================== AUTH / WISHLIST SETUP ====================
+    function setupAuthObserver() {
+      auth.onAuthStateChanged(user => {
+        if (user) {
+          document.getElementById('userIcon').className = 'fas fa-user-check';
+          document.getElementById('userIcon').style.color = '#2e7d32';
+          document.getElementById('userIcon').title = 'Profile (' + user.email + ')';
+          loadFavorites(user.uid);
+        } else {
+          document.getElementById('userIcon').className = 'far fa-user';
+          document.getElementById('userIcon').style.color = '';
+          document.getElementById('userIcon').title = 'Login / Profile';
+          userFavorites = [];
+          updateWishlistUI();
+        }
+      });
+    }
 
     // ==================== FAVORITES / WISHLIST ====================
     async function loadFavorites(uid) {
@@ -518,11 +514,9 @@ async function initializeFirebase() {
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    // Cart modal
     document.getElementById('cartIcon').addEventListener('click', ()=>openModal('cartModal'));
     document.getElementById('closeCartBtn').addEventListener('click', ()=>closeModal('cartModal'));
 
-    // Blockchain modal
     document.getElementById('blockchainIcon').addEventListener('click', async ()=>{
       await blockchain.ready;
       document.getElementById('blockchainContent').innerHTML = blockchain.getChainHTML();
@@ -533,7 +527,6 @@ async function initializeFirebase() {
       alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌'));
     });
 
-    // Info modal
     window.openInfoModal = function(title, content) {
       document.getElementById('infoModalTitle').textContent = title;
       document.getElementById('infoModalContent').innerHTML = content;
@@ -543,7 +536,7 @@ async function initializeFirebase() {
 
     // ==================== AUTH MODALS ====================
     document.getElementById('userIcon').addEventListener('click', () => {
-      if (auth.currentUser) {
+      if (auth && auth.currentUser) {
         const user = auth.currentUser;
         document.getElementById('profileContent').innerHTML = `
           <p><strong>Name:</strong> ${user.displayName || 'Not set'}</p>
@@ -598,7 +591,6 @@ async function initializeFirebase() {
       closeModal('profileModal');
     });
 
-    // Wishlist modal
     document.getElementById('wishlistIcon').addEventListener('click', ()=>{
       updateWishlistUI();
       openModal('wishlistModal');
@@ -648,14 +640,12 @@ async function initializeFirebase() {
     });
     chatInput.addEventListener('keypress', e => { if(e.key==='Enter') sendChatBtn.click(); });
 
-    // Close modals on overlay click
     window.addEventListener('click', e => {
       if(e.target.classList.contains('modal-overlay')) e.target.style.display='none';
     });
 
-    // Start
     // Start everything
-initializeFirebase();
+    initializeFirebase();
   </script>
 </body>
 </html>
