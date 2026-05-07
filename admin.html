@@ -6,92 +6,119 @@
   <title>ElectroHub Admin</title>
   <style>
     body { font-family: sans-serif; background: #e3f5e9; padding: 2rem; }
-    .container { max-width: 600px; margin: 0 auto; background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
-    label { display: block; margin: 1rem 0 0.3rem; font-weight: bold; }
+    .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
+    h1 { color: #1b5e20; }
+    label { display: block; margin-top: 1rem; font-weight: bold; }
     input, select { width: 100%; padding: 0.7rem; border: 2px solid #c8e6c9; border-radius: 8px; font-size: 1rem; }
     button { margin-top: 1rem; background: #2e7d32; color: white; padding: 0.8rem 2rem; border: none; border-radius: 30px; font-weight: bold; cursor: pointer; }
-    #status { margin-top: 1rem; }
+    .product-list { margin-top: 2rem; }
+    .product-item { border: 1px solid #ccc; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; }
+    .product-item span { flex: 1; }
+    .actions button { margin-left: 0.5rem; background: #c62828; padding: 0.4rem 1rem; }
+    .actions button.edit { background: #2e7d32; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>🛠️ ElectroHub Admin</h1>
-    <p>Add a new product to the store.</p>
-
+    <h2>Add Product</h2>
     <form id="productForm">
-      <label>Name *</label>
-      <input type="text" id="name" required />
-
+      <label>Name *</label><input type="text" id="name" required />
       <label>Category *</label>
       <select id="category" required>
-        <option value="Smartphone">Smartphone</option>
-        <option value="Laptop">Laptop</option>
-        <option value="Headphone">Headphone</option>
-        <option value="Tablet">Tablet</option>
-        <option value="Camera">Camera</option>
-        <option value="Accessory">Accessory</option>
+        <option>Smartphone</option><option>Laptop</option><option>Headphone</option><option>Tablet</option><option>Camera</option><option>Accessory</option>
       </select>
-
-      <label>Price (KES) *</label>
-      <input type="number" id="priceKES" required />
-
-      <label>Image URL *</label>
-      <input type="text" id="image" placeholder="https://..." required />
-
-      <label>Icon (Font Awesome class)</label>
-      <input type="text" id="icon" value="fa-box" />
-
-      <label>Rating (0.0 – 5.0)</label>
-      <input type="number" id="rating" step="0.1" min="0" max="5" value="4.5" />
-
-      <label>Supplier (optional)</label>
-      <input type="text" id="supplier" />
-
+      <label>Price (KES) *</label><input type="number" id="priceKES" required />
+      <label>Image URL *</label><input type="text" id="image" required />
+      <label>Icon</label><input type="text" id="icon" value="fa-box" />
+      <label>Rating</label><input type="number" id="rating" step="0.1" min="0" max="5" value="4.5" />
+      <label>Supplier</label><input type="text" id="supplier" />
+      <label>Description</label><input type="text" id="description" />
+      <input type="hidden" id="editId" />
       <button type="submit">Add Product</button>
     </form>
-    <div id="status"></div>
+
+    <h2>Existing Products</h2>
+    <div class="product-list" id="productList">Loading...</div>
   </div>
 
   <script>
-    const form = document.getElementById('productForm');
-    const status = document.getElementById('status');
-
-    // Find admin secret from URL parameter (better than hardcoding)
     const urlParams = new URLSearchParams(window.location.search);
     const adminKey = urlParams.get('key') || prompt('Enter admin key:');
+    const form = document.getElementById('productForm');
+    const listDiv = document.getElementById('productList');
+
+    // Fetch and display products
+    async function loadProducts() {
+      const res = await fetch('/api/products');
+      const products = await res.json();
+      listDiv.innerHTML = products.map(p => `
+        <div class="product-item">
+          <span>${p.name} - KES ${p.priceKES.toLocaleString()}</span>
+          <div class="actions">
+            <button class="edit" onclick="editProduct(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.category}', ${p.priceKES}, '${p.image.replace(/'/g, "\\'")}', '${p.icon}', ${p.rating}, '${p.supplier||''}', '${p.description||''}')">Edit</button>
+            <button onclick="deleteProduct(${p.id})">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.editProduct = function(id, name, cat, price, img, icon, rating, supplier, desc) {
+      document.getElementById('name').value = name;
+      document.getElementById('category').value = cat;
+      document.getElementById('priceKES').value = price;
+      document.getElementById('image').value = img;
+      document.getElementById('icon').value = icon;
+      document.getElementById('rating').value = rating;
+      document.getElementById('supplier').value = supplier;
+      document.getElementById('description').value = desc;
+      document.getElementById('editId').value = id;
+      document.querySelector('button[type="submit"]').textContent = 'Update Product';
+    };
+
+    window.deleteProduct = async function(id) {
+      if (!confirm('Delete this product?')) return;
+      await fetch('/api/products', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ id })
+      });
+      loadProducts();
+    };
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const data = {
+      const id = document.getElementById('editId').value;
+      const method = id ? 'PUT' : 'POST';
+      const body = {
         name: document.getElementById('name').value,
         category: document.getElementById('category').value,
         priceKES: parseInt(document.getElementById('priceKES').value),
         image: document.getElementById('image').value,
         icon: document.getElementById('icon').value,
         rating: parseFloat(document.getElementById('rating').value),
-        supplier: document.getElementById('supplier').value
+        supplier: document.getElementById('supplier').value,
+        description: document.getElementById('description').value
       };
+      if (id) body.id = parseInt(id);
 
-      try {
-        const res = await fetch('/api/products', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-admin-key': adminKey
-          },
-          body: JSON.stringify(data)
-        });
-        const result = await res.json();
-        if (res.ok) {
-          status.innerHTML = '<p style="color:green;">✅ Product added successfully!</p>';
-          form.reset();
-        } else {
-          status.innerHTML = `<p style="color:red;">❌ ${result.error || 'Failed'}</p>`;
-        }
-      } catch (err) {
-        status.innerHTML = `<p style="color:red;">❌ Network error</p>`;
+      const res = await fetch('/api/products', {
+        method,
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        form.reset();
+        document.getElementById('editId').value = '';
+        document.querySelector('button[type="submit"]').textContent = 'Add Product';
+        loadProducts();
+      } else {
+        const err = await res.json();
+        alert('Error: ' + (err.error || 'Failed'));
       }
     });
+
+    loadProducts();
   </script>
 </body>
 </html>
