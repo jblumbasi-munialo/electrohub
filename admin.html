@@ -6,14 +6,14 @@
   <title>ElectroHub Admin</title>
   <style>
     body { font-family: sans-serif; background: #e3f5e9; padding: 2rem; }
-    .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
-    h1 { color: #1b5e20; }
+    .container { max-width: 900px; margin: 0 auto; background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
+    h2 { color: #1b5e20; margin-top: 1.5rem; }
     label { display: block; margin-top: 1rem; font-weight: bold; }
     input, select { width: 100%; padding: 0.7rem; border: 2px solid #c8e6c9; border-radius: 8px; font-size: 1rem; }
     button { margin-top: 1rem; background: #2e7d32; color: white; padding: 0.8rem 2rem; border: none; border-radius: 30px; font-weight: bold; cursor: pointer; }
-    .product-list { margin-top: 2rem; }
-    .product-item { border: 1px solid #ccc; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; }
-    .product-item span { flex: 1; }
+    .product-list, .order-list { margin-top: 1rem; }
+    .product-item, .order-item { border: 1px solid #ccc; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; }
+    .product-item span, .order-item span { flex: 1; }
     .actions button { margin-left: 0.5rem; background: #c62828; padding: 0.4rem 1rem; }
     .actions button.edit { background: #2e7d32; }
   </style>
@@ -21,7 +21,8 @@
 <body>
   <div class="container">
     <h1>🛠️ ElectroHub Admin</h1>
-    <h2>Add Product</h2>
+
+    <h2>Products</h2>
     <form id="productForm">
       <label>Name *</label><input type="text" id="name" required />
       <label>Category *</label>
@@ -37,22 +38,21 @@
       <input type="hidden" id="editId" />
       <button type="submit">Add Product</button>
     </form>
-
-    <h2>Existing Products</h2>
     <div class="product-list" id="productList">Loading...</div>
+
+    <h2>Orders</h2>
+    <div class="order-list" id="orderList">Loading...</div>
   </div>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const adminKey = urlParams.get('key') || prompt('Enter admin key:');
-    const form = document.getElementById('productForm');
-    const listDiv = document.getElementById('productList');
 
-    // Fetch and display products
+    // ---------- Product CRUD (same as before) ----------
     async function loadProducts() {
       const res = await fetch('/api/products');
       const products = await res.json();
-      listDiv.innerHTML = products.map(p => `
+      document.getElementById('productList').innerHTML = products.map(p => `
         <div class="product-item">
           <span>${p.name} - KES ${p.priceKES.toLocaleString()}</span>
           <div class="actions">
@@ -86,7 +86,7 @@
       loadProducts();
     };
 
-    form.addEventListener('submit', async (e) => {
+    document.getElementById('productForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('editId').value;
       const method = id ? 'PUT' : 'POST';
@@ -101,7 +101,6 @@
         description: document.getElementById('description').value
       };
       if (id) body.id = parseInt(id);
-
       const res = await fetch('/api/products', {
         method,
         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
@@ -118,7 +117,60 @@
       }
     });
 
+    // ---------- Order Management ----------
+    async function loadOrders() {
+      // Fetch guestOrders and user-specific orders (simplified: only guestOrders and a flat collection of all user orders)
+      const guestSnap = await firebase.firestore().collection('guestOrders').get();
+      // User orders are spread across subcollections; for simplicity, we'll just show guestOrders.
+      // In a real app, you'd combine both. We'll just display guest orders here.
+      const orders = [];
+      guestSnap.forEach(doc => {
+        orders.push({ id: doc.id, ...doc.data(), type: 'guest' });
+      });
+      // If you have a separate admin orders collection, you could fetch that too.
+      document.getElementById('orderList').innerHTML = orders.map(order => {
+        const statusSteps = ['pending', 'confirmed', 'shipped', 'delivered'];
+        const currentStatus = order.status || 'pending';
+        const nextStatuses = statusSteps.slice(statusSteps.indexOf(currentStatus)+1);
+        return `
+          <div class="order-item">
+            <span>
+              <strong>${order.type === 'guest' ? 'Guest' : order.customer?.name}</strong> - KES ${order.totalKES.toLocaleString()} (${currentStatus})
+            </span>
+            <div class="actions">
+              <select onchange="updateOrderStatus('${order.id}', '${order.type}', this.value)">
+                <option value="">Update Status</option>
+                ${nextStatuses.map(s => `<option value="${s}">${s}</option>`).join('')}
+              </select>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    window.updateOrderStatus = async function(orderId, type, newStatus) {
+      if (!newStatus) return;
+      const endpoint = type === 'guest' ? `/api/orders` : `/api/orders`; // same endpoint
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ orderId, type, status: newStatus })
+      });
+      if (res.ok) loadOrders();
+      else alert('Update failed');
+    };
+
+    // Initialize Firebase for Firestore access (to read orders)
+    firebase.initializeApp({
+      apiKey: "AIzaSyBPdBYIVg6k_9SOGuZYz-FV091nLdMgNbM",
+      authDomain: "electrohub-kenya.firebaseapp.com",
+      projectId: "electrohub-kenya",
+      storageBucket: "electrohub-kenya.firebasestorage.app",
+      messagingSenderId: "256960919112",
+      appId: "1:256960919112:web:7adc2189cb1be0f468ca7d"
+    });
+
     loadProducts();
+    loadOrders();
   </script>
 </body>
 </html>
