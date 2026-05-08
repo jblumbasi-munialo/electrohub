@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
+    /* Same complete CSS as before (no changes) */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
@@ -156,7 +157,6 @@
       </ul>
     </aside>
     <main class="main-content">
-      <!-- Popular Products Section -->
       <h2 class="section-title">🔥 Trending Now</h2>
       <div class="product-grid" id="popularGrid">Loading...</div>
 
@@ -247,7 +247,7 @@
     </div>
   </div>
 
-  <!-- Orders Modal (with progress bar) -->
+  <!-- Orders Modal (same as before) -->
   <div class="modal-overlay" id="ordersModal">
     <div class="modal-box">
       <h2>Your Orders</h2>
@@ -276,7 +276,7 @@
     </div>
   </div>
 
-  <!-- Guest Checkout Modal -->
+  <!-- Guest Checkout Modal (with M‑Pesa button) -->
   <div class="modal-overlay" id="guestCheckoutModal">
     <div class="modal-box">
       <h2>Guest Checkout</h2>
@@ -289,6 +289,7 @@
       <div class="form-group"><label>Expiry (MMYY) *</label><input type="text" id="guestExpiry" placeholder="MMYY" /></div>
       <div class="form-group"><label>CVV *</label><input type="text" id="guestCvv" placeholder="3–4 digits" /></div>
       <button class="auth-btn" id="confirmGuestOrderBtn">Place Order as Guest</button>
+      <button class="auth-btn" id="mpesaPayBtn" style="background:#1b5e20;">📱 Pay with M‑Pesa</button>
       <button class="close-btn" id="closeGuestCheckoutBtn" style="margin-top:0.5rem;">Cancel</button>
     </div>
   </div>
@@ -362,7 +363,7 @@
       }
     }
 
-    // ==================== SIMPLE BLOCKCHAIN ====================
+    // ==================== SIMPLE BLOCKCHAIN (same) ====================
     class Block { constructor(index, timestamp, data, previousHash = '') { this.index = index; this.timestamp = timestamp; this.data = data; this.previousHash = previousHash; this.hash = ''; } }
     class Blockchain {
       constructor() { this.chain = []; this.ready = this.init(); }
@@ -405,6 +406,7 @@
           document.getElementById('userIcon').style.color = '#2e7d32';
           document.getElementById('userIcon').title = 'Profile (' + user.email + ')';
           loadFavorites(user.uid);
+          requestNotificationPermission(user);
         } else {
           document.getElementById('userIcon').className = 'far fa-user';
           document.getElementById('userIcon').style.color = '';
@@ -427,7 +429,23 @@
     }
     window.removeFavorite = function(id) { toggleFavorite(id); updateWishlistUI(); };
 
-    // ==================== PRODUCT LOADING ====================
+    // ==================== PUSH NOTIFICATIONS ====================
+    async function requestNotificationPermission(user) {
+      if (!('Notification' in window) || Notification.permission === 'denied') return;
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        const messaging = firebase.messaging();
+        try {
+          const token = await messaging.getToken({ vapidKey: 'YOUR_VAPID_KEY' }); // Replace with your VAPID key
+          if (token) {
+            await db.collection('users').doc(user.uid).update({ fcmToken: token });
+            console.log('FCM token saved');
+          }
+        } catch (e) { console.warn('FCM token error', e); }
+      }
+    }
+
+    // ==================== PRODUCT LOADING (same) ====================
     async function loadProducts() {
       try {
         const res = await fetch('/api/products');
@@ -455,8 +473,6 @@
         });
       });
     }
-
-    // ==================== SORT & FILTER ====================
     function applyFiltersAndSort() {
       let filtered = products.filter(p => {
         const mc = currentCategory === 'all' || p.category === currentCategory;
@@ -473,7 +489,6 @@
       }
       renderProducts(filtered);
     }
-
     function renderProducts(filtered = null) {
       const display = filtered || products;
       const grid = document.getElementById('productGrid');
@@ -504,8 +519,6 @@
           </div>`;
       }).join('');
     }
-
-    // ==================== POPULAR PRODUCTS ====================
     async function loadPopularProducts() {
       try {
         const snapshot = await db.collection('productCounters').orderBy('count', 'desc').limit(6).get();
@@ -544,42 +557,27 @@
       } catch (e) { /* ignore */ }
     }
 
-    // ==================== COMPARE ====================
-    function toggleCompare(productId) {
-      const idx = compareList.indexOf(productId);
-      if (idx > -1) compareList.splice(idx, 1);
-      else compareList.push(productId);
-      updateCompareUI();
-    }
+    // ==================== COMPARE (same) ====================
+    function toggleCompare(productId) { const idx = compareList.indexOf(productId); if (idx > -1) compareList.splice(idx, 1); else compareList.push(productId); updateCompareUI(); }
     function updateCompareUI() {
-      const bar = document.getElementById('compareBar');
-      const btn = document.getElementById('compareBtn');
-      const countSpan = document.getElementById('compareCount');
-      const selectedSpan = document.getElementById('compareSelectedCount');
+      const bar = document.getElementById('compareBar'), btn = document.getElementById('compareBtn');
+      const countSpan = document.getElementById('compareCount'), selectedSpan = document.getElementById('compareSelectedCount');
       const count = compareList.length;
-      if (count > 0) {
-        bar.style.display = 'flex';
-        btn.style.display = 'inline-block';
-        countSpan.textContent = count;
-        selectedSpan.textContent = count;
-      } else {
-        bar.style.display = 'none';
-        btn.style.display = 'none';
-      }
+      if (count > 0) { bar.style.display = 'flex'; btn.style.display = 'inline-block'; countSpan.textContent = count; selectedSpan.textContent = count; }
+      else { bar.style.display = 'none'; btn.style.display = 'none'; }
     }
     function clearCompare() { compareList = []; updateCompareUI(); document.querySelectorAll('.compare-checkbox').forEach(cb => cb.checked = false); }
     function openCompareModal() {
-      if (compareList.length < 2) return alert('Select at least two products to compare.');
-      const productsToCompare = products.filter(p => compareList.includes(p.id));
-      let html = '<table style="width:100%; border-collapse:collapse;"><tr><th>Feature</th>';
-      productsToCompare.forEach(p => html += `<th>${p.name}</th>`);
+      if (compareList.length < 2) return alert('Select at least two products.');
+      const prods = products.filter(p => compareList.includes(p.id));
+      let html = '<table style="width:100%;border-collapse:collapse;"><tr><th>Feature</th>';
+      prods.forEach(p => html += `<th>${p.name}</th>`);
       html += '</tr>';
-      const features = ['category', 'priceKES', 'rating', 'icon', 'supplier', 'description'];
-      features.forEach(f => {
-        html += '<tr><td style="font-weight:bold;">' + f + '</td>';
-        productsToCompare.forEach(p => {
+      ['category','priceKES','rating','icon','supplier','description'].forEach(f => {
+        html += '<tr><td style="font-weight:bold;">'+f+'</td>';
+        prods.forEach(p => {
           let val = p[f] || '';
-          if (f === 'priceKES') val = 'KES ' + val.toLocaleString();
+          if (f==='priceKES') val = 'KES '+val.toLocaleString();
           html += `<td>${val}</td>`;
         });
         html += '</tr>';
@@ -591,37 +589,25 @@
 
     // ==================== REVIEW SYSTEM ====================
     async function loadReviews(productId) {
-      const revContainer = document.getElementById('reviews-' + productId);
+      const revContainer = document.getElementById('reviews-'+productId);
       if (!revContainer) return;
-      const snapshot = await db.collection('reviews').where('productId', '==', productId).get();
+      const snapshot = await db.collection('reviews').where('productId','==',productId).get();
       const reviews = snapshot.docs.map(d => d.data());
       const avg = reviews.reduce((sum,r) => sum + r.rating, 0) / (reviews.length || 1);
-      let stars = '';
-      for (let i = 1; i <= 5; i++) stars += i <= Math.round(avg) ? '⭐' : '☆';
-      revContainer.innerHTML = `
-        <div style="margin-top:1rem;"><strong>Rating:</strong> ${stars} (${reviews.length} reviews)</div>
-        <ul>${reviews.map(r => `<li>${r.userName || 'User'}: ${r.rating}⭐ - ${r.comment || ''}</li>`).join('')}</ul>
-      `;
+      let stars = ''; for (let i=1;i<=5;i++) stars += i <= Math.round(avg) ? '⭐' : '☆';
+      revContainer.innerHTML = `<div style="margin-top:1rem;"><strong>Rating:</strong> ${stars} (${reviews.length} reviews)</div><ul>${reviews.map(r => `<li>${r.userName || 'User'}: ${r.rating}⭐ - ${r.comment||''}</li>`).join('')}</ul>`;
     }
     window.writeReview = function(productId) {
       if (!auth.currentUser) return alert('Please login to write a review.');
-      const rating = prompt('Your rating (1-5):');
-      if (!rating || isNaN(rating) || rating < 1 || rating > 5) return;
+      const rating = prompt('Your rating (1-5):'); if (!rating || isNaN(rating) || rating<1 || rating>5) return;
       const comment = prompt('Your comment (optional):') || '';
       db.collection('reviews').add({
-        productId: productId,
-        userId: auth.currentUser.uid,
-        userName: auth.currentUser.displayName || auth.currentUser.email,
-        rating: Number(rating),
-        comment: comment,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(() => {
-        alert('Review submitted!');
-        loadReviews(productId);
-      });
+        productId, userId: auth.currentUser.uid, userName: auth.currentUser.displayName || auth.currentUser.email,
+        rating: Number(rating), comment, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => { alert('Review submitted!'); loadReviews(productId); });
     };
 
-    // ==================== PRODUCT DETAIL MODAL ====================
+    // ==================== PRODUCT DETAIL MODAL (same) ====================
     window.openDetailModal = function(id) {
       const p = products.find(pp => pp.id === id);
       if (!p) return;
@@ -642,7 +628,7 @@
     };
     function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
 
-    // ==================== CART ====================
+    // ==================== CART (same) ====================
     async function addToCart(productId) {
       const existing = cart.find(i => i.id === productId);
       if (existing) existing.quantity++;
@@ -654,8 +640,7 @@
     function removeFromCart(id) { cart = cart.filter(i => i.id !== id); saveCart(); updateCartUI(); }
     function updateCartUI() {
       document.getElementById('cartCount').textContent = cart.reduce((s,i) => s + i.quantity, 0);
-      const list = document.getElementById('cartItemsList');
-      const tot = document.getElementById('cartTotal');
+      const list = document.getElementById('cartItemsList'), tot = document.getElementById('cartTotal');
       if (cart.length === 0) {
         list.innerHTML = '<li style="justify-content:center;color:#666;">Cart empty</li>';
         tot.textContent = 'Total: KES 0.00'; document.getElementById('placeOrderBtn').disabled = true;
@@ -688,12 +673,10 @@
       openModal('blockchainModal');
     });
     document.getElementById('closeBlockchainBtn').addEventListener('click', () => closeModal('blockchainModal'));
-    document.getElementById('validateChainBtn').addEventListener('click', () => {
-      alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌'));
-    });
+    document.getElementById('validateChainBtn').addEventListener('click', () => alert('Blockchain integrity: ' + (blockchain.isChainValid() ? 'VALID ✅' : 'INVALID ❌')));
     document.getElementById('closeInfoBtn').addEventListener('click', () => closeModal('infoModal'));
 
-    // Auth modals
+    // Auth modals (same)
     document.getElementById('userIcon').addEventListener('click', () => {
       if (auth.currentUser) {
         const user = auth.currentUser;
@@ -739,19 +722,19 @@
     });
     document.getElementById('logoutBtn').addEventListener('click', () => { auth.signOut(); closeModal('profileModal'); });
 
-    // Orders modal with progress bar
+    // Orders modal (now from unified 'orders' collection)
     document.getElementById('viewOrdersBtn').addEventListener('click', async () => {
       if (!auth.currentUser) return;
-      const snap = await db.collection('users').doc(auth.currentUser.uid).collection('orders').orderBy('timestamp','desc').get();
+      const snap = await db.collection('orders').where('userId', '==', auth.currentUser.uid).orderBy('timestamp','desc').get();
       const oc = document.getElementById('ordersContent');
       if (snap.empty) { oc.innerHTML = '<p>No orders.</p>'; }
       else {
         oc.innerHTML = snap.docs.map(doc => {
           const o = doc.data();
-          const statusSteps = ['pending', 'confirmed', 'shipped', 'delivered'];
+          const statusSteps = ['pending','confirmed','shipped','delivered'];
           const currentIdx = statusSteps.indexOf(o.status || 'pending');
           let progressBar = '';
-          for (let i = 0; i < statusSteps.length; i++) {
+          for (let i=0; i<statusSteps.length; i++) {
             const active = i <= currentIdx ? 'background:#2e7d32; color:white;' : 'background:#e0e0e0; color:#555;';
             progressBar += `<span style="display:inline-block; width:22%; padding:0.25rem; text-align:center; border-radius:12px; margin:0 1%; ${active}">${statusSteps[i]}</span>`;
           }
@@ -770,7 +753,7 @@
     });
     document.getElementById('closeOrdersBtn').addEventListener('click', () => closeModal('ordersModal'));
 
-    // Guest checkout
+    // ==================== PLACE ORDER (with email) ====================
     document.getElementById('placeOrderBtn').addEventListener('click', () => {
       if (cart.length === 0) return;
       if (!auth.currentUser) openModal('guestCheckoutModal');
@@ -814,27 +797,50 @@
         totalKES: total,
         timestamp: new Date().toISOString(),
         status: 'pending',
-        customer
+        customer,
+        userId: uid || null
       };
       try {
-        if (uid) await db.collection('users').doc(uid).collection('orders').add(orderData);
-        else await db.collection('guestOrders').add(orderData);
+        const docRef = await db.collection('orders').add(orderData);
         await blockchain.addBlock({ type: 'order_placed', totalKES: total });
-        alert('Order placed!');
+        // Send confirmation email
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: customer.email,
+            subject: `ElectroHub Order Confirmation – #${docRef.id.slice(0,6)}`,
+            html: `<h2>Thank you, ${customer.name}!</h2><p>Your order total is <strong>KES ${total.toLocaleString()}</strong>.</p><p>We'll notify you when it ships.</p><ul>${cart.map(i => `<li>${i.name} x${i.quantity} – KES ${(i.priceKES*i.quantity).toLocaleString()}</li>`).join('')}</ul>`
+          })
+        });
+        alert('Order placed! Check your email.');
         cart = []; saveCart(); updateCartUI();
         closeModal('cartModal'); closeModal('guestCheckoutModal');
       } catch (e) { alert('Order failed: ' + e.message); }
     }
 
+    // ==================== M‑Pesa STK push ====================
+    document.getElementById('mpesaPayBtn').addEventListener('click', async () => {
+      const phone = document.getElementById('guestPhone').value.trim();
+      if (!phone) return alert('Enter your M‑Pesa phone number.');
+      const total = cart.reduce((s,i) => s + (i.priceKES * i.quantity), 0);
+      const res = await fetch('/api/mpesa-stk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, amount: total })
+      });
+      const data = await res.json();
+      if (data.id) alert('STK Push sent! Check your phone to complete payment.');
+      else alert('M‑Pesa request failed: ' + (data.error || 'Unknown'));
+    });
+
     // Wishlist modal
     document.getElementById('wishlistIcon').addEventListener('click', () => { updateWishlistUI(); openModal('wishlistModal'); });
     document.getElementById('closeWishlistBtn').addEventListener('click', () => closeModal('wishlistModal'));
 
-    // Search
+    // Search, sort, filter (same)
     document.getElementById('searchBtn').addEventListener('click', () => { searchTerm = document.getElementById('searchInput').value.trim(); applyFiltersAndSort(); });
     document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key==='Enter') { searchTerm = e.target.value.trim(); applyFiltersAndSort(); } });
-
-    // Sort & Filter controls
     document.getElementById('sortSelect').addEventListener('change', function() { sortMode = this.value; applyFiltersAndSort(); });
     document.getElementById('filterBtn').addEventListener('click', () => { priceMin = document.getElementById('priceMin').value; priceMax = document.getElementById('priceMax').value; applyFiltersAndSort(); });
 
@@ -865,7 +871,7 @@
 
     window.addEventListener('click', e => { if (e.target.classList.contains('modal-overlay')) e.target.style.display = 'none'; });
 
-    // Init everything
+    // Init
     initializeFirebase();
   </script>
 </body>
