@@ -48,7 +48,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     const adminKey = urlParams.get('key') || prompt('Enter admin key:');
 
-    // ---------- Product CRUD (same as before) ----------
+    // ---------- Product CRUD (unchanged) ----------
     async function loadProducts() {
       const res = await fetch('/api/products');
       const products = await res.json();
@@ -117,28 +117,22 @@
       }
     });
 
-    // ---------- Order Management ----------
+    // ---------- Order Management (now from unified 'orders' collection) ----------
     async function loadOrders() {
-      // Fetch guestOrders and user-specific orders (simplified: only guestOrders and a flat collection of all user orders)
-      const guestSnap = await firebase.firestore().collection('guestOrders').get();
-      // User orders are spread across subcollections; for simplicity, we'll just show guestOrders.
-      // In a real app, you'd combine both. We'll just display guest orders here.
+      const ordersSnap = await firebase.firestore().collection('orders').orderBy('timestamp','desc').get();
       const orders = [];
-      guestSnap.forEach(doc => {
-        orders.push({ id: doc.id, ...doc.data(), type: 'guest' });
-      });
-      // If you have a separate admin orders collection, you could fetch that too.
+      ordersSnap.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
       document.getElementById('orderList').innerHTML = orders.map(order => {
-        const statusSteps = ['pending', 'confirmed', 'shipped', 'delivered'];
+        const statusSteps = ['pending','confirmed','shipped','delivered'];
         const currentStatus = order.status || 'pending';
         const nextStatuses = statusSteps.slice(statusSteps.indexOf(currentStatus)+1);
         return `
           <div class="order-item">
             <span>
-              <strong>${order.type === 'guest' ? 'Guest' : order.customer?.name}</strong> - KES ${order.totalKES.toLocaleString()} (${currentStatus})
+              <strong>${order.customer?.name || 'Guest'}</strong> - KES ${order.totalKES.toLocaleString()} (${currentStatus})
             </span>
             <div class="actions">
-              <select onchange="updateOrderStatus('${order.id}', '${order.type}', this.value)">
+              <select onchange="updateOrderStatus('${order.id}', '${order.userId || ''}', this.value)">
                 <option value="">Update Status</option>
                 ${nextStatuses.map(s => `<option value="${s}">${s}</option>`).join('')}
               </select>
@@ -147,19 +141,22 @@
       }).join('');
     }
 
-    window.updateOrderStatus = async function(orderId, type, newStatus) {
+    window.updateOrderStatus = async function(orderId, userId, newStatus) {
       if (!newStatus) return;
-      const endpoint = type === 'guest' ? `/api/orders` : `/api/orders`; // same endpoint
-      const res = await fetch(endpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-        body: JSON.stringify({ orderId, type, status: newStatus })
-      });
-      if (res.ok) loadOrders();
-      else alert('Update failed');
+      // Update in Firestore
+      await firebase.firestore().collection('orders').doc(orderId).update({ status: newStatus });
+      // Send push notification if user has FCM token
+      if (userId) {
+        await fetch('/api/send-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, title: 'Order Status Updated', body: `Your order #${orderId.slice(0,6)} is now ${newStatus}.` })
+        });
+      }
+      loadOrders();
     };
 
-    // Initialize Firebase for Firestore access (to read orders)
+    // Initialize Firebase for admin
     firebase.initializeApp({
       apiKey: "AIzaSyBPdBYIVg6k_9SOGuZYz-FV091nLdMgNbM",
       authDomain: "electrohub-kenya.firebaseapp.com",
