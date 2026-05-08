@@ -9,7 +9,7 @@
     .container { max-width: 900px; margin: 0 auto; background: white; padding: 2rem; border-radius: 16px; box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
     h2 { color: #1b5e20; margin-top: 1.5rem; }
     label { display: block; margin-top: 1rem; font-weight: bold; }
-    input, select { width: 100%; padding: 0.7rem; border: 2px solid #c8e6c9; border-radius: 8px; font-size: 1rem; }
+    input, select, textarea { width: 100%; padding: 0.7rem; border: 2px solid #c8e6c9; border-radius: 8px; font-size: 1rem; }
     button { margin-top: 1rem; background: #2e7d32; color: white; padding: 0.8rem 2rem; border: none; border-radius: 30px; font-weight: bold; cursor: pointer; }
     .product-list, .order-list { margin-top: 1rem; }
     .product-item, .order-item { border: 1px solid #ccc; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; }
@@ -22,7 +22,7 @@
   <div class="container">
     <h1>🛠️ ElectroHub Admin</h1>
 
-    <h2>Products</h2>
+    <h2>Add / Edit Product</h2>
     <form id="productForm">
       <label>Name *</label><input type="text" id="name" required />
       <label>Category *</label>
@@ -30,14 +30,18 @@
         <option>Smartphone</option><option>Laptop</option><option>Headphone</option><option>Tablet</option><option>Camera</option><option>Accessory</option>
       </select>
       <label>Price (KES) *</label><input type="number" id="priceKES" required />
-      <label>Image URL *</label><input type="text" id="image" required />
+      <label>Main Image URL *</label><input type="text" id="image" required placeholder="Thumbnail shown in lists" />
+      <label>Additional Images (comma‑separated URLs)</label>
+      <input type="text" id="imagesInput" placeholder="URL1, URL2, URL3 ..." />
       <label>Icon</label><input type="text" id="icon" value="fa-box" />
       <label>Rating</label><input type="number" id="rating" step="0.1" min="0" max="5" value="4.5" />
       <label>Supplier</label><input type="text" id="supplier" />
-      <label>Description</label><input type="text" id="description" />
+      <label>Description</label><textarea id="description" rows="3"></textarea>
       <input type="hidden" id="editId" />
       <button type="submit">Add Product</button>
     </form>
+
+    <h2>Existing Products</h2>
     <div class="product-list" id="productList">Loading...</div>
 
     <h2>Orders</h2>
@@ -48,26 +52,27 @@
     const urlParams = new URLSearchParams(window.location.search);
     const adminKey = urlParams.get('key') || prompt('Enter admin key:');
 
-    // ---------- Product CRUD (unchanged) ----------
+    // ---------- Product CRUD ----------
     async function loadProducts() {
       const res = await fetch('/api/products');
       const products = await res.json();
       document.getElementById('productList').innerHTML = products.map(p => `
         <div class="product-item">
-          <span>${p.name} - KES ${p.priceKES.toLocaleString()}</span>
+          <span>${p.name} - KES ${p.priceKES.toLocaleString()} (${p.images?.length || 1} images)</span>
           <div class="actions">
-            <button class="edit" onclick="editProduct(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.category}', ${p.priceKES}, '${p.image.replace(/'/g, "\\'")}', '${p.icon}', ${p.rating}, '${p.supplier||''}', '${p.description||''}')">Edit</button>
+            <button class="edit" onclick="editProduct(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.category}', ${p.priceKES}, '${p.image.replace(/'/g, "\\'")}', '${(p.images||[]).join(', ').replace(/'/g, "\\'")}', '${p.icon}', ${p.rating}, '${p.supplier||''}', '${p.description||''}')">Edit</button>
             <button onclick="deleteProduct(${p.id})">Delete</button>
           </div>
         </div>
       `).join('');
     }
 
-    window.editProduct = function(id, name, cat, price, img, icon, rating, supplier, desc) {
+    window.editProduct = function(id, name, cat, price, mainImg, imgs, icon, rating, supplier, desc) {
       document.getElementById('name').value = name;
       document.getElementById('category').value = cat;
       document.getElementById('priceKES').value = price;
-      document.getElementById('image').value = img;
+      document.getElementById('image').value = mainImg;
+      document.getElementById('imagesInput').value = imgs;
       document.getElementById('icon').value = icon;
       document.getElementById('rating').value = rating;
       document.getElementById('supplier').value = supplier;
@@ -90,11 +95,23 @@
       e.preventDefault();
       const id = document.getElementById('editId').value;
       const method = id ? 'PUT' : 'POST';
+      const mainImg = document.getElementById('image').value.trim();
+      const imagesStr = document.getElementById('imagesInput').value.trim();
+      const imagesArr = imagesStr ? imagesStr.split(',').map(s => s.trim()).filter(s => s) : [];
+      // Ensure main image is always first
+      if (!imagesArr.includes(mainImg)) imagesArr.unshift(mainImg);
+      else if (imagesArr[0] !== mainImg) {
+        // move mainImg to first position
+        const idx = imagesArr.indexOf(mainImg);
+        imagesArr.splice(idx, 1);
+        imagesArr.unshift(mainImg);
+      }
       const body = {
         name: document.getElementById('name').value,
         category: document.getElementById('category').value,
         priceKES: parseInt(document.getElementById('priceKES').value),
-        image: document.getElementById('image').value,
+        image: mainImg,
+        images: imagesArr,
         icon: document.getElementById('icon').value,
         rating: parseFloat(document.getElementById('rating').value),
         supplier: document.getElementById('supplier').value,
@@ -107,7 +124,7 @@
         body: JSON.stringify(body)
       });
       if (res.ok) {
-        form.reset();
+        document.getElementById('productForm').reset();
         document.getElementById('editId').value = '';
         document.querySelector('button[type="submit"]').textContent = 'Add Product';
         loadProducts();
@@ -117,7 +134,7 @@
       }
     });
 
-    // ---------- Order Management (now from unified 'orders' collection) ----------
+    // ---------- Order Management ----------
     async function loadOrders() {
       const ordersSnap = await firebase.firestore().collection('orders').orderBy('timestamp','desc').get();
       const orders = [];
@@ -143,9 +160,7 @@
 
     window.updateOrderStatus = async function(orderId, userId, newStatus) {
       if (!newStatus) return;
-      // Update in Firestore
       await firebase.firestore().collection('orders').doc(orderId).update({ status: newStatus });
-      // Send push notification if user has FCM token
       if (userId) {
         await fetch('/api/send-push', {
           method: 'POST',
@@ -156,7 +171,7 @@
       loadOrders();
     };
 
-    // Initialize Firebase for admin
+    // Initialize Firebase
     firebase.initializeApp({
       apiKey: "AIzaSyBPdBYIVg6k_9SOGuZYz-FV091nLdMgNbM",
       authDomain: "electrohub-kenya.firebaseapp.com",
