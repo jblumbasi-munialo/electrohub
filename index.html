@@ -9,7 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
-    /* Same complete CSS as before (no changes) */
+    /* Same complete CSS as before, plus minor slider additions */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
@@ -53,8 +53,11 @@
     .sidebar li:hover { background: #b9dfc2; }
     .main-content { flex: 1; min-width: 300px; }
     .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #1b5e20; display: flex; align-items: center; gap: 0.5rem; }
+    /* Controls moved to top of main content */
     .controls-bar {
-      display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; align-items: center;
+      display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; align-items: center;
+      background: white; padding: 0.8rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+      border: 1px solid #c8e6c9;
     }
     .controls-bar label { font-weight: 600; margin-right: 0.3rem; }
     .controls-bar select, .controls-bar input[type=number] {
@@ -157,9 +160,7 @@
       </ul>
     </aside>
     <main class="main-content">
-      <h2 class="section-title">🔥 Trending Now</h2>
-      <div class="product-grid" id="popularGrid">Loading...</div>
-
+      <!-- Sort & Filter Bar (moved here) -->
       <div class="controls-bar">
         <label>Sort:</label>
         <select id="sortSelect">
@@ -175,6 +176,10 @@
         <button id="filterBtn">Apply</button>
         <button id="compareBtn" style="display:none; background:#ffb300; color:#000; margin-left:auto;">Compare (<span id="compareCount">0</span>)</button>
       </div>
+
+      <!-- Trending Now Section -->
+      <h2 class="section-title">🔥 Trending Now</h2>
+      <div class="product-grid" id="popularGrid">Loading...</div>
 
       <h2 class="section-title">📱 All Products</h2>
       <div class="product-grid" id="productGrid">Loading products...</div>
@@ -247,7 +252,7 @@
     </div>
   </div>
 
-  <!-- Orders Modal (same as before) -->
+  <!-- Orders Modal (with progress bar) -->
   <div class="modal-overlay" id="ordersModal">
     <div class="modal-box">
       <h2>Your Orders</h2>
@@ -363,7 +368,7 @@
       }
     }
 
-    // ==================== SIMPLE BLOCKCHAIN (same) ====================
+    // ==================== SIMPLE BLOCKCHAIN (unchanged) ====================
     class Block { constructor(index, timestamp, data, previousHash = '') { this.index = index; this.timestamp = timestamp; this.data = data; this.previousHash = previousHash; this.hash = ''; } }
     class Blockchain {
       constructor() { this.chain = []; this.ready = this.init(); }
@@ -425,7 +430,7 @@
       const wc = document.getElementById('wishlistContent');
       if (userFavorites.length === 0) { wc.innerHTML = '<p>No favorites yet.</p>'; return; }
       const favs = products.filter(p => userFavorites.includes(p.id));
-      wc.innerHTML = favs.map(p => `<div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.8rem;"><img src="${p.image}" style="width:50px;height:50px;object-fit:cover;border-radius:8px;" onerror="this.src='https://via.placeholder.com/50'"><span style="flex:1;">${p.name}</span><span style="font-weight:700;">KES ${p.priceKES.toLocaleString()}</span><i class="fas fa-trash-alt" style="color:#c62828;cursor:pointer;" onclick="removeFavorite(${p.id})"></i></div>`).join('');
+      wc.innerHTML = favs.map(p => `<div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.8rem;"><img src="${p.images?.[0] || p.image}" style="width:50px;height:50px;object-fit:cover;border-radius:8px;" onerror="this.src='https://via.placeholder.com/50'"><span style="flex:1;">${p.name}</span><span style="font-weight:700;">KES ${p.priceKES.toLocaleString()}</span><i class="fas fa-trash-alt" style="color:#c62828;cursor:pointer;" onclick="removeFavorite(${p.id})"></i></div>`).join('');
     }
     window.removeFavorite = function(id) { toggleFavorite(id); updateWishlistUI(); };
 
@@ -436,16 +441,13 @@
       if (permission === 'granted') {
         const messaging = firebase.messaging();
         try {
-          const token = await messaging.getToken({ vapidKey: 'YOUR_VAPID_KEY' }); // Replace with your VAPID key
-          if (token) {
-            await db.collection('users').doc(user.uid).update({ fcmToken: token });
-            console.log('FCM token saved');
-          }
+          const token = await messaging.getToken({ vapidKey: 'YOUR_VAPID_KEY' });
+          if (token) { await db.collection('users').doc(user.uid).update({ fcmToken: token }); }
         } catch (e) { console.warn('FCM token error', e); }
       }
     }
 
-    // ==================== PRODUCT LOADING (same) ====================
+    // ==================== PRODUCT LOADING ====================
     async function loadProducts() {
       try {
         const res = await fetch('/api/products');
@@ -473,6 +475,8 @@
         });
       });
     }
+
+    // ==================== SORT & FILTER ====================
     function applyFiltersAndSort() {
       let filtered = products.filter(p => {
         const mc = currentCategory === 'all' || p.category === currentCategory;
@@ -489,16 +493,18 @@
       }
       renderProducts(filtered);
     }
+
     function renderProducts(filtered = null) {
       const display = filtered || products;
       const grid = document.getElementById('productGrid');
       grid.innerHTML = display.map(p => {
         const isFav = userFavorites.includes(p.id);
         const isCompared = compareList.includes(p.id);
+        const firstImg = p.images?.[0] || p.image;
         return `
           <div class="product-card" onclick="openDetailModal(${p.id})">
             <div class="product-img">
-              <img src="${p.image}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+              <img src="${firstImg}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
               <i class="fas ${p.icon||'fa-box'} fallback-icon" style="display:none;"></i>
               <div class="fav-btn ${isFav?'active':''}" onclick="event.stopPropagation(); toggleFavorite(${p.id})">
                 <i class="${isFav?'fas':'far'} fa-heart"></i>
@@ -519,6 +525,7 @@
           </div>`;
       }).join('');
     }
+
     async function loadPopularProducts() {
       try {
         const snapshot = await db.collection('productCounters').orderBy('count', 'desc').limit(6).get();
@@ -529,10 +536,11 @@
         if (popular.length === 0) { grid.innerHTML = '<p>No trending items yet.</p>'; return; }
         grid.innerHTML = popular.map(p => {
           const isFav = userFavorites.includes(p.id);
+          const firstImg = p.images?.[0] || p.image;
           return `
             <div class="product-card" onclick="openDetailModal(${p.id})">
               <div class="product-img">
-                <img src="${p.image}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+                <img src="${firstImg}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
                 <i class="fas ${p.icon||'fa-box'} fallback-icon" style="display:none;"></i>
                 <div class="fav-btn ${isFav?'active':''}" onclick="event.stopPropagation(); toggleFavorite(${p.id})">
                   <i class="${isFav?'fas':'far'} fa-heart"></i>
@@ -557,7 +565,7 @@
       } catch (e) { /* ignore */ }
     }
 
-    // ==================== COMPARE (same) ====================
+    // ==================== COMPARE ====================
     function toggleCompare(productId) { const idx = compareList.indexOf(productId); if (idx > -1) compareList.splice(idx, 1); else compareList.push(productId); updateCompareUI(); }
     function updateCompareUI() {
       const bar = document.getElementById('compareBar'), btn = document.getElementById('compareBtn');
@@ -607,13 +615,30 @@
       }).then(() => { alert('Review submitted!'); loadReviews(productId); });
     };
 
-    // ==================== PRODUCT DETAIL MODAL (same) ====================
+    // ==================== PRODUCT DETAIL MODAL (with slider) ====================
     window.openDetailModal = function(id) {
       const p = products.find(pp => pp.id === id);
       if (!p) return;
+
+      const allImages = (p.images && p.images.length) ? p.images : [p.image];
+      let sliderHTML = '';
+      if (allImages.length === 1) {
+        sliderHTML = `<img src="${allImages[0]}" style="max-width:100%; max-height:300px; border-radius:12px;" alt="${p.name}">`;
+      } else {
+        sliderHTML = `
+          <div style="position:relative; overflow:hidden; border-radius:12px;">
+            <div id="detailSlider" style="display:flex; transition: transform 0.3s ease;">
+              ${allImages.map(img => `<img src="${img}" style="min-width:100%; max-height:300px; object-fit:contain;" alt="${p.name}">`).join('')}
+            </div>
+            <button onclick="slideDetail(-1)" style="position:absolute; top:50%; left:5px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:2rem; height:2rem; cursor:pointer;">‹</button>
+            <button onclick="slideDetail(1)" style="position:absolute; top:50%; right:5px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:2rem; height:2rem; cursor:pointer;">›</button>
+          </div>
+        `;
+      }
+
       document.getElementById('detailContent').innerHTML = `
         <div style="text-align:center;">
-          <img src="${p.image}" style="max-width:100%; max-height:300px; border-radius:12px;" alt="${p.name}">
+          ${sliderHTML}
           <h2 style="margin-top:1rem;">${p.name}</h2>
           <p style="font-size:1.4rem; font-weight:bold; color:#1b5e20;">KES ${p.priceKES.toLocaleString()}</p>
           <p><i class="fas fa-star" style="color:#ffb300;"></i> ${p.rating||'4.5'} | ${p.category}</p>
@@ -625,10 +650,22 @@
         </div>`;
       document.getElementById('detailModal').style.display = 'flex';
       loadReviews(p.id);
+
+      // Slider state
+      if (allImages.length > 1) {
+        window._detailSliderIndex = 0;
+        window._detailSliderTotal = allImages.length;
+        window.slideDetail = function(dir) {
+          window._detailSliderIndex = (window._detailSliderIndex + dir + window._detailSliderTotal) % window._detailSliderTotal;
+          document.getElementById('detailSlider').style.transform = `translateX(-${window._detailSliderIndex * 100}%)`;
+        };
+      } else {
+        window.slideDetail = function() {};
+      }
     };
     function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
 
-    // ==================== CART (same) ====================
+    // ==================== CART (unchanged) ====================
     async function addToCart(productId) {
       const existing = cart.find(i => i.id === productId);
       if (existing) existing.quantity++;
@@ -722,7 +759,7 @@
     });
     document.getElementById('logoutBtn').addEventListener('click', () => { auth.signOut(); closeModal('profileModal'); });
 
-    // Orders modal (now from unified 'orders' collection)
+    // Orders modal (from unified 'orders' collection)
     document.getElementById('viewOrdersBtn').addEventListener('click', async () => {
       if (!auth.currentUser) return;
       const snap = await db.collection('orders').where('userId', '==', auth.currentUser.uid).orderBy('timestamp','desc').get();
@@ -838,7 +875,7 @@
     document.getElementById('wishlistIcon').addEventListener('click', () => { updateWishlistUI(); openModal('wishlistModal'); });
     document.getElementById('closeWishlistBtn').addEventListener('click', () => closeModal('wishlistModal'));
 
-    // Search, sort, filter (same)
+    // Search, sort, filter
     document.getElementById('searchBtn').addEventListener('click', () => { searchTerm = document.getElementById('searchInput').value.trim(); applyFiltersAndSort(); });
     document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key==='Enter') { searchTerm = e.target.value.trim(); applyFiltersAndSort(); } });
     document.getElementById('sortSelect').addEventListener('change', function() { sortMode = this.value; applyFiltersAndSort(); });
