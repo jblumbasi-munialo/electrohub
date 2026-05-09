@@ -9,7 +9,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
-    /* Same complete CSS as before, plus minor slider additions */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
@@ -53,7 +52,7 @@
     .sidebar li:hover { background: #b9dfc2; }
     .main-content { flex: 1; min-width: 300px; }
     .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: #1b5e20; display: flex; align-items: center; gap: 0.5rem; }
-    /* Controls moved to top of main content */
+    /* Controls bar at top */
     .controls-bar {
       display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; align-items: center;
       background: white; padding: 0.8rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);
@@ -160,7 +159,7 @@
       </ul>
     </aside>
     <main class="main-content">
-      <!-- Sort & Filter Bar (moved here) -->
+      <!-- Sort & Filter Bar at the top -->
       <div class="controls-bar">
         <label>Sort:</label>
         <select id="sortSelect">
@@ -193,7 +192,7 @@
     <button onclick="clearCompare()" style="background:#c62828;">Clear</button>
   </div>
 
-  <!-- Product Detail Modal -->
+  <!-- Product Detail Modal (with slider and cross-sell) -->
   <div class="modal-overlay" id="detailModal">
     <div class="modal-box" style="max-width:600px;">
       <div id="detailContent"></div>
@@ -615,7 +614,52 @@
       }).then(() => { alert('Review submitted!'); loadReviews(productId); });
     };
 
-    // ==================== PRODUCT DETAIL MODAL (with slider) ====================
+    // ==================== FREQUENTLY BOUGHT TOGETHER (NEW) ====================
+    async function loadCrossSell(productId) {
+      const relatedDiv = document.getElementById('crosssell-' + productId);
+      if (!relatedDiv) return;
+      try {
+        // Find orders that contain this product
+        const ordersSnap = await db.collection('orders')
+          .where('items', 'array-contains', { id: productId })
+          .limit(20)
+          .get();
+        const coProducts = {};
+        ordersSnap.forEach(doc => {
+          const order = doc.data();
+          if (order.items && Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              if (item.id !== productId) {
+                coProducts[item.id] = (coProducts[item.id] || 0) + 1;
+              }
+            });
+          }
+        });
+        const topIds = Object.entries(coProducts)
+          .sort((a,b) => b[1] - a[1])
+          .slice(0, 4)
+          .map(e => parseInt(e[0]));
+        const crossSell = products.filter(p => topIds.includes(p.id));
+        if (crossSell.length > 0) {
+          relatedDiv.innerHTML = `
+            <h3 style="margin-top:1rem;">🛒 Frequently Bought Together</h3>
+            <div style="display:flex; gap:1rem; flex-wrap:wrap; justify-content:center;">
+              ${crossSell.map(p => `
+                <div style="text-align:center; cursor:pointer;" onclick="openDetailModal(${p.id})">
+                  <img src="${p.images?.[0] || p.image}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">
+                  <div style="font-size:0.8rem; max-width:80px;">${p.name}</div>
+                  <div style="font-weight:bold;">KES ${p.priceKES.toLocaleString()}</div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        } else {
+          relatedDiv.innerHTML = '';
+        }
+      } catch (e) { console.warn('Cross-sell load failed', e); }
+    }
+
+    // ==================== PRODUCT DETAIL MODAL (with slider & cross-sell) ====================
     window.openDetailModal = function(id) {
       const p = products.find(pp => pp.id === id);
       if (!p) return;
@@ -647,11 +691,12 @@
           <hr style="margin:1.5rem 0;">
           <div id="reviews-${p.id}"></div>
           <button class="auth-btn" style="width:auto; padding:0.5rem 2rem; margin-top:0.5rem;" onclick="writeReview(${p.id})">Write a Review</button>
+          <div id="crosssell-${p.id}" style="margin-top:1rem;"></div>
         </div>`;
       document.getElementById('detailModal').style.display = 'flex';
       loadReviews(p.id);
+      loadCrossSell(p.id);
 
-      // Slider state
       if (allImages.length > 1) {
         window._detailSliderIndex = 0;
         window._detailSliderTotal = allImages.length;
