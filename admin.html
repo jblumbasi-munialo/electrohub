@@ -44,39 +44,173 @@
     <h2>Existing Products</h2>
     <div class="product-list" id="productList">Loading...</div>
 
+    <h2>Pending Seller Listings</h2>
+    <div class="product-list" id="pendingSellerProducts">Loading...</div>
+
+    <h2>Pending Seller Applications</h2>
+    <div class="product-list" id="pendingSellerApplications">Loading...</div>
+
     <h2>Orders</h2>
     <div class="order-list" id="orderList">Loading...</div>
+
+    <h2>Pending Reviews</h2>
+    <div class="review-list" id="pendingReviewList">No pending reviews.</div>
+
   </div>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const adminKey = urlParams.get('key') || prompt('Enter admin key:');
+    const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
 
     // ---------- Product CRUD ----------
     async function loadProducts() {
-      const res = await fetch('/api/products');
+      const res = await fetch('/api/products?approved=true', { headers: { 'x-admin-key': adminKey } });
       const products = await res.json();
       document.getElementById('productList').innerHTML = products.map(p => `
         <div class="product-item">
-          <span>${p.name} - KES ${p.priceKES.toLocaleString()} (${p.images?.length || 1} images)</span>
+          <span>
+            ${escapeHTML(p.name)} - KES ${p.priceKES.toLocaleString()} (${p.images?.length || 1} images)
+            <br>
+            <small>Status: Approved${p.seller_id ? ` · Seller: ${escapeHTML(p.seller_name || p.seller_id)}` : ''}</small>
+          </span>
           <div class="actions">
-            <button class="edit" onclick="editProduct(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.category}', ${p.priceKES}, '${p.image.replace(/'/g, "\\'")}', '${(p.images||[]).join(', ').replace(/'/g, "\\'")}', '${p.icon}', ${p.rating}, '${p.supplier||''}', '${p.description||''}')">Edit</button>
+            <button class="edit" onclick="editProduct(
+              ${p.id},
+              '${encodeURIComponent(p.name)}',
+              '${p.category}',
+              ${p.priceKES},
+              '${encodeURIComponent(p.image)}',
+              '${encodeURIComponent(JSON.stringify(p.images || []))}',
+              '${p.icon}',
+              ${p.rating},
+              '${encodeURIComponent(p.supplier || '')}',
+              '${encodeURIComponent(p.description || '')}'
+            )">Edit</button>
             <button onclick="deleteProduct(${p.id})">Delete</button>
           </div>
         </div>
       `).join('');
     }
 
-    window.editProduct = function(id, name, cat, price, mainImg, imgs, icon, rating, supplier, desc) {
-      document.getElementById('name').value = name;
+    async function loadPendingSellerProducts() {
+      const res = await fetch('/api/products?approved=false', { headers: { 'x-admin-key': adminKey } });
+      const products = await res.json();
+      const container = document.getElementById('pendingSellerProducts');
+      if (!products.length) {
+        container.innerHTML = '<p>No pending seller products.</p>';
+        return;
+      }
+
+      container.innerHTML = products.map(p => `
+        <div class="product-item">
+          <span>${escapeHTML(p.name)} - KES ${p.priceKES.toLocaleString()} | Seller: ${escapeHTML(p.seller_name || p.seller_id || 'Unknown')} | Status: Pending</span>
+          <div class="actions">
+            <button class="edit" onclick="approveSellerProduct(${p.id})">Approve</button>
+            <button onclick="rejectSellerProduct(${p.id})">Reject</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function loadPendingSellerApplications() {
+      const res = await fetch('/api/sellers?status=pending', { headers: { 'x-admin-key': adminKey } });
+      const sellers = await res.json();
+      const container = document.getElementById('pendingSellerApplications');
+      if (!sellers.length) {
+        container.innerHTML = '<p>No pending seller applications.</p>';
+        return;
+      }
+
+      container.innerHTML = sellers.map(s => `
+        <div class="product-item">
+          <span>
+            ${escapeHTML(s.store_name)} · ${escapeHTML(s.owner_name)} · ${escapeHTML(s.email)} · ${escapeHTML(s.phone)}<br>
+            <small>Business: ${escapeHTML(s.business_name)}</small>
+          </span>
+          <div class="actions">
+            <button class="edit" onclick="approveSellerApplication(${s.id})">Approve</button>
+            <button onclick="rejectSellerApplication(${s.id})">Reject</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.approveSellerProduct = async function(productId) {
+      const res = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ id: productId, approved: true })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert('Approval failed: ' + (err.error || 'Unknown error'));
+        return;
+      }
+      alert('Seller product approved.');
+      loadProducts();
+      loadPendingSellerProducts();
+    };
+
+    window.rejectSellerProduct = async function(productId) {
+      const res = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ id: productId, approved: false })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert('Rejection failed: ' + (err.error || 'Unknown error'));
+        return;
+      }
+      alert('Seller product rejected and hidden from the public catalog.');
+      loadProducts();
+      loadPendingSellerProducts();
+    };
+
+    window.approveSellerApplication = async function(sellerId) {
+      const res = await fetch('/api/sellers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ id: sellerId, status: 'approved', kycStatus: 'verified' })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert('Seller approval failed: ' + (err.error || 'Unknown error'));
+        return;
+      }
+      alert('Seller application approved.');
+      loadPendingSellerApplications();
+    };
+
+    window.rejectSellerApplication = async function(sellerId) {
+      const res = await fetch('/api/sellers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ id: sellerId, status: 'rejected', kycStatus: 'rejected' })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert('Seller rejection failed: ' + (err.error || 'Unknown error'));
+        return;
+      }
+      alert('Seller application rejected.');
+      loadPendingSellerApplications();
+    };
+
+    window.editProduct = function(id, name, cat, price, mainImg, imgsJson, icon, rating, supplier, desc) {
+      document.getElementById('name').value = decodeURIComponent(name);
       document.getElementById('category').value = cat;
       document.getElementById('priceKES').value = price;
-      document.getElementById('image').value = mainImg;
-      document.getElementById('imagesInput').value = imgs;
+      document.getElementById('image').value = decodeURIComponent(mainImg);
+      const imagesArray = JSON.parse(decodeURIComponent(imgsJson));
+      document.getElementById('imagesInput').value = imagesArray.join(', ');
       document.getElementById('icon').value = icon;
       document.getElementById('rating').value = rating;
-      document.getElementById('supplier').value = supplier;
-      document.getElementById('description').value = desc;
+      document.getElementById('supplier').value = decodeURIComponent(supplier);
+      document.getElementById('description').value = decodeURIComponent(desc);
       document.getElementById('editId').value = id;
       document.querySelector('button[type="submit"]').textContent = 'Update Product';
     };
@@ -91,6 +225,15 @@
       loadProducts();
     };
 
+    window.approveProduct = async function(id) {
+      await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ id, approved: true })
+      });
+      loadProducts();
+    };
+
     document.getElementById('productForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const id = document.getElementById('editId').value;
@@ -101,7 +244,6 @@
       // Ensure main image is always first
       if (!imagesArr.includes(mainImg)) imagesArr.unshift(mainImg);
       else if (imagesArr[0] !== mainImg) {
-        // move mainImg to first position
         const idx = imagesArr.indexOf(mainImg);
         imagesArr.splice(idx, 1);
         imagesArr.unshift(mainImg);
@@ -115,7 +257,8 @@
         icon: document.getElementById('icon').value,
         rating: parseFloat(document.getElementById('rating').value),
         supplier: document.getElementById('supplier').value,
-        description: document.getElementById('description').value
+        description: document.getElementById('description').value,
+        approved: true
       };
       if (id) body.id = parseInt(id);
       const res = await fetch('/api/products', {
@@ -128,6 +271,7 @@
         document.getElementById('editId').value = '';
         document.querySelector('button[type="submit"]').textContent = 'Add Product';
         loadProducts();
+        loadPendingSellerProducts();
       } else {
         const err = await res.json();
         alert('Error: ' + (err.error || 'Failed'));
@@ -171,6 +315,78 @@
       loadOrders();
     };
 
+    // ---------- Review Management ----------
+    async function loadPendingReviews() {
+      const reviewsSnap = await firebase.firestore().collection('reviews').where('status', '==', 'pending').orderBy('timestamp', 'desc').get();
+      const reviews = [];
+      reviewsSnap.forEach(doc => reviews.push({ id: doc.id, ...doc.data() }));
+
+      const reviewListDiv = document.getElementById('pendingReviewList');
+      if (reviews.length === 0) {
+        reviewListDiv.innerHTML = '<p>No pending reviews.</p>';
+        return;
+      }
+
+      reviewListDiv.innerHTML = reviews.map(r => `
+        <div class="review-item" style="border:1px solid #c8e6c9; border-radius:8px; padding:0.8rem; margin-bottom:0.8rem;">
+          <p><strong>Product ID:</strong> ${r.productId}</p>
+          <p><strong>User:</strong> ${r.userName || 'Anonymous'}</p>
+          <p><strong>Rating:</strong> ${r.rating}⭐</p>
+          <p><strong>Comment:</strong> ${r.comment || 'No comment.'}</p>
+          <div class="actions" style="margin-top:0.5rem;">
+            <button class="edit" onclick="approveReview('${r.id}')" style="background:#2e7d32;">Approve</button>
+            <button onclick="rejectReview('${r.id}')" style="background:#c62828;">Reject</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.approveReview = async function(reviewId) {
+      await firebase.firestore().collection('reviews').doc(reviewId).update({ status: 'approved' });
+      alert('Review approved!');
+      loadPendingReviews();
+      // Optionally, update the product's average rating in the products collection
+      updateProductAverageRating(reviewId);
+    };
+
+    window.rejectReview = async function(reviewId) {
+      if (!confirm('Are you sure you want to reject this review? It will be permanently deleted.')) return;
+      await firebase.firestore().collection('reviews').doc(reviewId).delete();
+      alert('Review rejected and deleted.');
+      loadPendingReviews();
+    };
+
+    async function updateProductAverageRating(reviewId) {
+        // Fetch the product ID associated with the approved review
+        const reviewDoc = await firebase.firestore().collection('reviews').doc(reviewId).get();
+        if (!reviewDoc.exists || reviewDoc.data().status !== 'approved') return; // Only update for approved reviews
+
+        const productId = reviewDoc.data().productId;
+        const productRef = firebase.firestore().collection('products').doc(productId.toString());
+
+        // Get all approved reviews for this product
+        const reviewsSnap = await firebase.firestore().collection('reviews')
+            .where('productId', '==', productId)
+            .where('status', '==', 'approved')
+            .get();
+
+        if (reviewsSnap.empty) {
+            await productRef.update({ rating: 0 }); // No approved reviews, reset rating
+            return;
+        }
+
+        let totalRating = 0;
+        reviewsSnap.forEach(doc => {
+            totalRating += doc.data().rating;
+        });
+
+        const averageRating = (totalRating / reviewsSnap.size).toFixed(1);
+
+        // Update the product's rating in Firestore
+        await productRef.update({ rating: parseFloat(averageRating) });
+    }
+
+
     // Initialize Firebase
     firebase.initializeApp({
       apiKey: "AIzaSyBPdBYIVg6k_9SOGuZYz-FV091nLdMgNbM",
@@ -182,7 +398,11 @@
     });
 
     loadProducts();
+    loadPendingSellerProducts();
+    loadPendingSellerApplications();
     loadOrders();
+    loadPendingReviews();
   </script>
 </body>
 </html>
+

@@ -1,5 +1,6 @@
 // api/products.js
 const { Pool } = require('pg');
+const crypto = require('crypto');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 module.exports = async function handler(req, res) {
@@ -15,8 +16,18 @@ module.exports = async function handler(req, res) {
         icon TEXT DEFAULT 'fa-box',
         rating REAL DEFAULT 4.5,
         supplier TEXT DEFAULT '',
-        description TEXT DEFAULT ''
+        description TEXT DEFAULT '',
+        seller_id TEXT DEFAULT '',
+        seller_name TEXT DEFAULT 'ElectroHub',
+        approved BOOLEAN DEFAULT TRUE,
+        review_status TEXT DEFAULT 'approved',
+        created_at TIMESTAMP DEFAULT NOW()
       );
+    `);
+    await pool.query(`
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS review_status TEXT DEFAULT 'approved';
+      UPDATE products SET review_status = 'pending'
+      WHERE seller_id <> '' AND approved = FALSE AND review_status = 'approved';
     `);
 
     const { rows: countRows } = await pool.query('SELECT COUNT(*)::int AS count FROM products');
@@ -116,10 +127,29 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // GET – return all products
+    // GET – return products by visibility or seller
     if (req.method === 'GET') {
-      const result = await pool.query('SELECT * FROM products ORDER BY id');
-      // Transform images from JSON string to array
+      const { sellerId, approved } = req.query || {};
+      const isAdmin = Boolean(process.env.ADMIN_SECRET && req.headers['x-admin-key'] === process.env.ADMIN_SECRET);
+
+      let query = "SELECT * FROM products WHERE approved = TRUE AND review_status = 'approved' ORDER BY id";
+      let params = [];
+
+      if ((sellerId || approved !== undefined) && !isAdmin) {
+        return res.status(401).json({ error: 'Unauthorized admin access.' });
+      }
+
+      if (sellerId) {
+        query = 'SELECT * FROM products WHERE seller_id = $1 ORDER BY id';
+        params = [sellerId];
+      } else if (approved !== undefined) {
+        const approvedValue = approved === 'true' || approved === '1';
+        query = approvedValue
+          ? "SELECT * FROM products WHERE approved = TRUE AND review_status = 'approved' ORDER BY id"
+          : "SELECT * FROM products WHERE review_status = 'pending' ORDER BY id";
+      }
+
+      const result = await pool.query(query, params);
       const rows = result.rows.map(row => ({
         ...row,
         images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : []
@@ -130,16 +160,35 @@ module.exports = async function handler(req, res) {
     // POST – add product (admin only)
     if (req.method === 'POST') {
       const adminKey = req.headers['x-admin-key'];
-      if (adminKey !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+      const sellerToken = req.headers['x-seller-token'];
+      const isAdmin = Boolean(process.env.ADMIN_SECRET && adminKey === process.env.ADMIN_SECRET);
+      const isAuthorized = isAdmin || Boolean(sellerToken);
+      if (!isAuthorized) return res.status(401).json({ error: 'Unauthorized' });
 
-      const { name, category, priceKES, image, images, icon, rating, supplier, description } = req.body;
-      if (!name || !category || !priceKES || !image) return res.status(400).json({ error: 'Missing required fields' });
+      const { name, category, priceKES, image, images, icon, rating, supplier, description, sellerName, approved } = req.body;
+      if (!name || !category || !Number.isFinite(Number(priceKES)) || Number(priceKES) <= 0 || !image) {
+        return res.status(400).json({ error: 'Missing or invalid required fields' });
+      }
 
-      const imagesArr = images || [image];  // ensure main image is in the array
+      let sellerId = '';
+      let sellerNameValue = sellerName || 'ElectroHub';
+      if (sellerToken && !isAdmin) {
+        const sellerTokenHash = crypto.createHash('sha256').update(sellerToken).digest('hex');
+        const sellerResult = await pool.query('SELECT id, store_name FROM sellers WHERE access_token_hash = $1 AND status = $2', [sellerTokenHash, 'approved']);
+        if (!sellerResult.rows.length) {
+          return res.status(403).json({ error: 'Seller credential is invalid or the account is not approved.' });
+        }
+        sellerId = String(sellerResult.rows[0].id);
+        sellerNameValue = sellerResult.rows[0].store_name;
+      }
+
+      const imagesArr = Array.isArray(images) && images.length ? images : [image];
+      const approvedValue = isAdmin ? (approved !== false) : false;
+      const reviewStatus = approvedValue ? 'approved' : 'pending';
       const result = await pool.query(
-        `INSERT INTO products (name, category, "priceKES", image, images, icon, rating, supplier, description)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [name, category, priceKES, image, JSON.stringify(imagesArr), icon||'fa-box', rating||4.5, supplier||'', description||'']
+        `INSERT INTO products (name, category, "priceKES", image, images, icon, rating, supplier, description, seller_id, seller_name, approved, review_status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+        [name, category, priceKES, image, JSON.stringify(imagesArr), icon||'fa-box', rating||4.5, supplier||'', description||'', sellerId || '', sellerNameValue, approvedValue, reviewStatus]
       );
       const row = result.rows[0];
       row.images = imagesArr;
@@ -149,14 +198,29 @@ module.exports = async function handler(req, res) {
     // PUT – update product
     if (req.method === 'PUT') {
       const adminKey = req.headers['x-admin-key'];
-      if (adminKey !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
-      const { id, name, category, priceKES, image, images, icon, rating, supplier, description } = req.body;
+      const sellerToken = req.headers['x-seller-token'];
+      const isAdmin = Boolean(process.env.ADMIN_SECRET && adminKey === process.env.ADMIN_SECRET);
+      if (!isAdmin && !sellerToken) return res.status(401).json({ error: 'Unauthorized' });
+
+      const { id, name, category, priceKES, image, images, icon, rating, supplier, description, sellerName, approved } = req.body;
       if (!id) return res.status(400).json({ error: 'Product ID required' });
+
+      if (!isAdmin && sellerToken) {
+        const sellerTokenHash = crypto.createHash('sha256').update(sellerToken).digest('hex');
+        const sellerCheck = await pool.query(
+          'SELECT p.seller_id FROM products p JOIN sellers s ON s.id::text = p.seller_id WHERE p.id = $1 AND s.access_token_hash = $2 AND s.status = $3',
+          [id, sellerTokenHash, 'approved']
+        );
+        if (sellerCheck.rows.length === 0) {
+          return res.status(403).json({ error: 'Seller cannot modify this product.' });
+        }
+      }
 
       const updates = [];
       const values = [];
       let idx = 1;
-      for (const [key, val] of Object.entries({ name, category, priceKES, image, images, icon, rating, supplier, description })) {
+      for (const [key, val] of Object.entries({ name, category, priceKES, image, images, icon, rating, supplier, description, sellerName, approved })) {
+        if (!isAdmin && key === 'approved') continue;
         if (val !== undefined) {
           if (key === 'images') {
             updates.push(`"images" = $${idx}`);
@@ -167,6 +231,13 @@ module.exports = async function handler(req, res) {
           }
           idx++;
         }
+      }
+      if (!isAdmin) {
+        updates.push('approved = FALSE', "review_status = 'pending'");
+      } else if (approved !== undefined) {
+        updates.push(`review_status = $${idx}`);
+        values.push(approved ? 'approved' : 'rejected');
+        idx++;
       }
       if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
       values.push(id);
@@ -181,7 +252,7 @@ module.exports = async function handler(req, res) {
     // DELETE – remove product
     if (req.method === 'DELETE') {
       const adminKey = req.headers['x-admin-key'];
-      if (adminKey !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+      if (!process.env.ADMIN_SECRET || adminKey !== process.env.ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
       const { id } = req.body;
       if (!id) return res.status(400).json({ error: 'Product ID required' });
       await pool.query('DELETE FROM products WHERE id = $1', [id]);

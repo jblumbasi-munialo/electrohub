@@ -130,12 +130,41 @@
       .search-section { order: 3; width: 100%; max-width: 100%; }
     }
   </style>
+<!-- index.html -->
+
+<style>
+  /* ... existing styles ... */
+
+  /* Star Rating Styles */
+  .rating-stars {
+    display: inline-block;
+    font-size: 1.5rem; /* Adjust star size */
+    color: #ccc; /* Default star color */
+    cursor: pointer;
+  }
+  .rating-stars .star {
+    transition: color 0.2s;
+  }
+  .rating-stars .star.active,
+  .rating-stars .star:hover,
+  .rating-stars .star:hover ~ .star {
+    color: #ffb300; /* Active/hover star color */
+  }
+  /* Ensure stars are responsive to touch */
+  .rating-stars .star {
+    padding: 0 2px;
+  }
+
+
+</style>
+
 </head>
 <body>
   <header class="top-bar">
     <div class="logo"><i class="fas fa-bolt"></i> ElectroHub <span class="blockchain-badge">BLOCKCHAIN</span></div>
     <div class="search-section">
-      <input type="text" placeholder="Search phones, laptops, gadgets..." id="searchInput" />
+      <input type="text" placeholder="Search phones, laptops, gadgets..." id="searchInput" list="productSuggestions" />
+      <datalist id="productSuggestions"></datalist>
       <button id="searchBtn"><i class="fas fa-search"></i> Search</button>
     </div>
     <div class="nav-icons">
@@ -172,16 +201,22 @@
         <label>Price Range (KES):</label>
         <input type="number" id="priceMin" placeholder="Min" style="width:80px;">
         <input type="number" id="priceMax" placeholder="Max" style="width:80px;">
+        <label>Supplier:</label>
+        <select id="supplierSelect">
+          <option value="all">All Suppliers</option>
+        </select>
         <button id="filterBtn">Apply</button>
+        <button id="clearFiltersBtn" style="background:#6c757d; margin-left: 0.5rem;">Clear Filters</button>
         <button id="compareBtn" style="display:none; background:#ffb300; color:#000; margin-left:auto;">Compare (<span id="compareCount">0</span>)</button>
       </div>
 
       <!-- Trending Now Section -->
       <h2 class="section-title">🔥 Trending Now</h2>
-      <div class="product-grid" id="popularGrid">Loading...</div>
+      <div id="trendingStatus" style="margin:-0.5rem 0 1rem; color:#6b7280; font-size:0.9rem;">Loading trending picks...</div>
+      <div class="product-grid" id="popularGrid"></div>
 
       <h2 class="section-title">📱 All Products</h2>
-      <div class="product-grid" id="productGrid">Loading products...</div>
+      <div class="product-grid" id="productGrid"></div>
     </main>
   </div>
 
@@ -337,6 +372,7 @@
 
   <footer class="footer">
     <div class="footer-links">
+      <a href="seller.html" target="_blank"><i class="fas fa-store"></i> Seller Portal</a>
       <a onclick="openInfoModal('About', 'ElectroHub is Kenya\'s trusted marketplace for quality electronics.')"><i class="fas fa-info-circle"></i> About</a>
       <a onclick="openInfoModal('Contact', 'Reach us at info@electrohub.co.ke or call +254 712 345 678.')"><i class="fas fa-envelope"></i> Contact</a>
       <a onclick="openInfoModal('FAQ', 'Q: How do I order? A: Add items to cart and checkout.')"><i class="fas fa-question-circle"></i> FAQ</a>
@@ -352,17 +388,22 @@
     let auth, db;
     async function initializeFirebase() {
       try {
+        if (window.location.protocol === 'file:') {
+          throw new Error('File protocol mode: skipping backend config');
+        }
         const res = await fetch('/api/config');
+        if (!res.ok) throw new Error('API config unavailable');
         const cfg = await res.json();
         if (!cfg.apiKey) throw new Error('Invalid config');
         firebase.initializeApp(cfg);
         auth = firebase.auth();
         db = firebase.firestore();
         setupAuthObserver();
-        loadProducts();
       } catch (e) {
-        console.error(e);
-        document.getElementById('productGrid').innerHTML = '<p style="color:red;">Could not connect to user services.</p>';
+        console.warn('Firebase not configured in this environment; continuing in static mode.', e);
+        auth = null;
+        db = null;
+      } finally {
         loadProducts();
       }
     }
@@ -381,9 +422,27 @@
     const blockchain = new Blockchain();
 
     // ==================== GLOBAL STATE ====================
-    let products = [], cart = [], currentCategory = 'all', searchTerm = '', userFavorites = [];
+    let products = [], cart = [], currentCategory = 'all', searchTerm = '';
     let sortMode = 'default', priceMin = null, priceMax = null;
     let compareList = [];
+    let userFavorites = []; // Correct placement
+    let currentSupplier = 'all'; // New global state for supplier filter
+    const FALLBACK_PRODUCTS = [
+      { id: 1, name: 'iPhone 15 Pro Max', category: 'Smartphone', priceKES: 179999, image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=400&q=80', images: ['https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=400&q=80', 'https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=400&q=80'], icon: 'fa-mobile-alt', rating: 4.8, supplier: '', description: 'Apple flagship with A17 Pro chip, 48MP camera, and titanium design.' },
+      { id: 2, name: 'Samsung Galaxy S24 Ultra', category: 'Smartphone', priceKES: 164999, image: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=400&q=80', images: ['https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=400&q=80', 'https://images.unsplash.com/photo-1598327105854-c8674f2d2e29?w=400&q=80'], icon: 'fa-mobile-alt', rating: 4.7, supplier: '', description: '200MP camera, S Pen, and powerful Snapdragon 8 Gen 3.' },
+      { id: 3, name: 'MacBook Air M3', category: 'Laptop', priceKES: 194999, image: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&q=80', images: ['https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&q=80', 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?w=400&q=80'], icon: 'fa-laptop', rating: 4.9, supplier: '', description: 'Lightweight laptop with M3 chip, 15.3" Liquid Retina display, 8GB RAM.' },
+      { id: 4, name: 'Dell XPS 15', category: 'Laptop', priceKES: 224999, image: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=400&q=80', images: ['https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=400&q=80', 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=400&q=80'], icon: 'fa-laptop', rating: 4.6, supplier: '', description: 'Premium Windows laptop with 13th Gen Intel i7, 16GB RAM, 512GB SSD.' },
+      { id: 5, name: 'Sony WH-1000XM5', category: 'Headphone', priceKES: 52499, image: 'https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=400&q=80', images: ['https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=400&q=80', 'https://images.unsplash.com/photo-1577174881658-0f30ed549ad0?w=400&q=80'], icon: 'fa-headphones', rating: 4.7, supplier: '', description: 'Industry-leading noise cancelling with 30-hour battery life.' },
+      { id: 6, name: 'AirPods Pro 2', category: 'Headphone', priceKES: 37499, image: 'https://images.unsplash.com/photo-1606841837239-c5a1a4a07af7?w=400&q=80', images: ['https://images.unsplash.com/photo-1606841837239-c5a1a4a07af7?w=400&q=80', 'https://images.unsplash.com/photo-1588423771073-b8903fbb85b5?w=400&q=80'], icon: 'fa-headphones', rating: 4.8, supplier: '', description: 'Apple 2nd gen Pro with adaptive audio and USB-C charging.' },
+      { id: 7, name: 'iPad Pro 12.9', category: 'Tablet', priceKES: 164999, image: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=400&q=80', images: ['https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=400&q=80', 'https://images.unsplash.com/photo-1585790050230-5dd28404ccb2?w=400&q=80'], icon: 'fa-tablet-alt', rating: 4.9, supplier: '', description: 'M2 chip, Liquid Retina XDR display, perfect for creatives.' },
+      { id: 8, name: 'Samsung Galaxy Tab S9', category: 'Tablet', priceKES: 134999, image: 'https://images.unsplash.com/photo-1585790050230-5dd28404ccb2?w=400&q=80', images: ['https://images.unsplash.com/photo-1585790050230-5dd28404ccb2?w=400&q=80', 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=400&q=80'], icon: 'fa-tablet-alt', rating: 4.5, supplier: '', description: 'Snapdragon 8 Gen 2, 120Hz AMOLED, S Pen included.' },
+      { id: 9, name: 'Canon EOS R6', category: 'Camera', priceKES: 374999, image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400&q=80', images: ['https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400&q=80', 'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=400&q=80'], icon: 'fa-camera', rating: 4.8, supplier: '', description: 'Full-frame mirrorless with 20MP, 4K 60p video, and IBIS.' },
+      { id: 10, name: 'GoPro Hero 12', category: 'Camera', priceKES: 59999, image: 'https://images.unsplash.com/photo-1564466809058-bf4114d55352?w=400&q=80', images: ['https://images.unsplash.com/photo-1564466809058-bf4114d55352?w=400&q=80', 'https://images.unsplash.com/photo-1533106418989-88406c7cc8ca?w=400&q=80'], icon: 'fa-camera', rating: 4.6, supplier: '', description: 'Waterproof action cam with 5.3K video and HyperSmooth 6.0.' },
+      { id: 11, name: 'USB-C Hub 7-in-1', category: 'Accessory', priceKES: 7349, image: 'https://images.unsplash.com/photo-1625723044792-44de16ccb4e9?w=400&q=80', images: ['https://images.unsplash.com/photo-1625723044792-44de16ccb4e9?w=400&q=80', 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=400&q=80'], icon: 'fa-plug', rating: 4.4, supplier: '', description: 'Compact hub with HDMI, USB-A, USB-C, SD card reader.' },
+      { id: 12, name: 'Wireless Charger Pad', category: 'Accessory', priceKES: 4349, image: 'https://images.unsplash.com/photo-1615526675159-e248c3021d3f?w=400&q=80', images: ['https://images.unsplash.com/photo-1615526675159-e248c3021d3f?w=400&q=80', 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=400&q=80'], icon: 'fa-charging-station', rating: 4.3, supplier: '', description: 'Fast wireless charger compatible with iPhone and Android.' },
+      { id: 13, name: 'Realme C55 4GB/64GB', category: 'Smartphone', priceKES: 15999, image: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=400&q=80', images: ['https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=400&q=80', 'https://images.unsplash.com/photo-1598327105668-5b89351aff97?w=400&q=80'], icon: 'fa-mobile-alt', rating: 4.2, supplier: 'Alibaba ID 123456', description: 'Budget smartphone with 64GB storage, 5000mAh battery.' },
+      { id: 14, name: 'JBL Flip 6', category: 'Accessory', priceKES: 12499, image: 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=400&q=80', images: ['https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=400&q=80', 'https://images.unsplash.com/photo-1558089687-f282ffcbc126?w=400&q=80'], icon: 'fa-speaker', rating: 4.6, supplier: '', description: 'Portable waterproof Bluetooth speaker with deep bass.' }
+    ];
 
     // Cart persistence
     function saveCart() { localStorage.setItem('electrohub_cart', JSON.stringify(cart)); }
@@ -404,6 +463,7 @@
 
     // ==================== AUTH & WISHLIST ====================
     function setupAuthObserver() {
+      if (!auth) return;
       auth.onAuthStateChanged(user => {
         if (user) {
           document.getElementById('userIcon').className = 'fas fa-user-check';
@@ -420,8 +480,18 @@
         }
       });
     }
-    async function loadFavorites(uid) { const doc = await db.collection('users').doc(uid).get(); userFavorites = doc.exists && doc.data().favorites ? doc.data().favorites : []; updateWishlistUI(); renderProducts(); }
-    async function saveFavorites() { const u = auth.currentUser; if (!u) return; await db.collection('users').doc(u.uid).set({ email: u.email, name: u.displayName || '', favorites: userFavorites }, { merge: true }); }
+    async function loadFavorites(uid) {
+      if (!db || !db.collection) return;
+      const doc = await db.collection('users').doc(uid).get();
+      userFavorites = doc.exists && doc.data().favorites ? doc.data().favorites : [];
+      updateWishlistUI();
+      renderProducts();
+    }
+    async function saveFavorites() {
+      if (!auth || !db || !auth.currentUser) return;
+      const u = auth.currentUser;
+      await db.collection('users').doc(u.uid).set({ email: u.email, name: u.displayName || '', favorites: userFavorites }, { merge: true });
+    }
     function toggleFavorite(id) { const idx = userFavorites.indexOf(id); if (idx > -1) userFavorites.splice(idx, 1); else userFavorites.push(id); saveFavorites(); updateWishlistUI(); renderProducts(); }
     function updateWishlistUI() {
       const cs = document.getElementById('wishlistCount');
@@ -435,7 +505,7 @@
 
     // ==================== PUSH NOTIFICATIONS ====================
     async function requestNotificationPermission(user) {
-      if (!('Notification' in window) || Notification.permission === 'denied') return;
+      if (!db || !firebase.messaging || !('Notification' in window) || Notification.permission === 'denied') return;
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         const messaging = firebase.messaging();
@@ -448,17 +518,53 @@
 
     // ==================== PRODUCT LOADING ====================
     async function loadProducts() {
+      const productGrid = document.getElementById('productGrid');
+      const popularGrid = document.getElementById('popularGrid');
+      if (productGrid) productGrid.innerHTML = '';
+      if (popularGrid) popularGrid.innerHTML = '';
+
       try {
-        const res = await fetch('/api/products');
-        if (!res.ok) throw new Error('Failed to load');
-        products = await res.json();
+        let loadedProducts = FALLBACK_PRODUCTS;
+
+        try {
+          const res = await fetch('/api/products');
+          if (!res.ok) throw new Error('API unavailable');
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            loadedProducts = data;
+          } else {
+            throw new Error('Empty API response');
+          }
+        } catch (apiError) {
+          console.warn('Falling back to embedded catalog because the server data is unavailable.', apiError);
+          loadedProducts = FALLBACK_PRODUCTS;
+        }
+
+        products = loadedProducts.map(p => ({
+          ...p,
+          id: Number(p.id),
+          priceKES: Number(p.priceKES || 0),
+          rating: Number(p.rating || 4.5),
+          images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []),
+          image: p.image || (Array.isArray(p.images) ? p.images[0] : ''),
+          stock: Math.floor(Math.random() * 20) + (Number(p.id) === 1 ? 0 : 5)
+        }));
+
         loadCart();
         populateCategories();
+        populateSuppliers();
         applyFiltersAndSort();
         updateCartUI();
         loadPopularProducts();
-        document.querySelector('.sidebar li[data-category="all"]').style.fontWeight = 'bold';
-      } catch (e) { console.error(e); document.getElementById('productGrid').innerHTML = '<p style="color:red;">Error loading products.</p>'; }
+        populateSearchSuggestions();
+
+        const allCat = document.querySelector('.sidebar li[data-category="all"]');
+        if (allCat) allCat.style.fontWeight = 'bold';
+      } catch (e) {
+        console.error('Unable to load products from API or fallback catalog.', e);
+        const productGrid = document.getElementById('productGrid');
+        if (productGrid) productGrid.innerHTML = '<p style="color:red;">Error loading products.</p>';
+      }
     }
     function populateCategories() {
       const cats = [...new Set(products.map(p => p.category))];
@@ -475,6 +581,661 @@
       });
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    function populateSearchSuggestions() {
+      const datalist = document.getElementById('productSuggestions');
+      datalist.innerHTML = products.map(p => `<option value="${p.name}"></option>`).join('');
+    }
+
+
+    // New function to populate suppliers
+    function populateSuppliers() {
+      const suppliers = [...new Set(products.map(p => p.supplier).filter(s => s !== ''))]; // Get unique non-empty suppliers
+      const select = document.getElementById('supplierSelect');
+      let html = '<option value="all">All Suppliers</option>';
+      suppliers.forEach(s => html += `<option value="${s}">${s}</option>`);
+      select.innerHTML = html;
+
+      select.addEventListener('change', function() {
+        currentSupplier = this.value;
+        applyFiltersAndSort();
+      });
+    }
+
+
     // ==================== SORT & FILTER ====================
     function applyFiltersAndSort() {
       let filtered = products.filter(p => {
@@ -482,7 +1243,9 @@
         const ms = p.name.toLowerCase().includes(searchTerm.toLowerCase());
         const inRange = (priceMin === null || priceMin === '' || p.priceKES >= Number(priceMin)) &&
                         (priceMax === null || priceMax === '' || p.priceKES <= Number(priceMax));
-        return mc && ms && inRange;
+        const msu = currentSupplier === 'all' || p.supplier === currentSupplier; // New supplier filter
+
+        return mc && ms && inRange && msu; // Include supplier filter
       });
       switch (sortMode) {
         case 'price_asc': filtered.sort((a,b) => a.priceKES - b.priceKES); break;
@@ -496,6 +1259,11 @@
     function renderProducts(filtered = null) {
       const display = filtered || products;
       const grid = document.getElementById('productGrid');
+      if (!grid) return;
+      if (!display || display.length === 0) {
+        grid.innerHTML = '<p style="color:#666;">No products match your current filters.</p>';
+        return;
+      }
       grid.innerHTML = display.map(p => {
         const isFav = userFavorites.includes(p.id);
         const isCompared = compareList.includes(p.id);
@@ -503,7 +1271,7 @@
         return `
           <div class="product-card" onclick="openDetailModal(${p.id})">
             <div class="product-img">
-              <img src="${firstImg}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+              <img src="${firstImg}" alt="${p.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
               <i class="fas ${p.icon||'fa-box'} fallback-icon" style="display:none;"></i>
               <div class="fav-btn ${isFav?'active':''}" onclick="event.stopPropagation(); toggleFavorite(${p.id})">
                 <i class="${isFav?'fas':'far'} fa-heart"></i>
@@ -525,36 +1293,123 @@
       }).join('');
     }
 
+    function buildCategoryAverageTrending(productsList) {
+      if (!Array.isArray(productsList) || productsList.length === 0) return [];
+
+      const grouped = {};
+      productsList.forEach(product => {
+        if (!product || !product.category) return;
+        const category = product.category.trim();
+        if (!grouped[category]) grouped[category] = [];
+        grouped[category].push(product);
+      });
+
+      const categoryPicks = Object.entries(grouped)
+        .map(([category, items]) => {
+          const average = items.reduce((sum, item) => sum + Number(item.priceKES || 0), 0) / items.length;
+          const bestMatch = [...items].sort((a, b) => {
+            const diffA = Math.abs(Number(a.priceKES || 0) - average);
+            const diffB = Math.abs(Number(b.priceKES || 0) - average);
+            if (diffA !== diffB) return diffA - diffB;
+            return (Number(b.rating || 0) - Number(a.rating || 0));
+          })[0];
+          return bestMatch ? { category, item: bestMatch, average } : null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.average - a.average)
+        .map(entry => entry.item);
+
+      if (categoryPicks.length >= 6) return categoryPicks.slice(0, 6);
+
+      const remaining = productsList.filter(product => !categoryPicks.some(item => item.id === product.id));
+      remaining.sort((a, b) => (Number(b.rating || 0) - Number(a.rating || 0)) || (Number(b.priceKES || 0) - Number(a.priceKES || 0)));
+
+      for (const product of remaining) {
+        if (categoryPicks.length >= 6) break;
+        if (!categoryPicks.some(item => item.id === product.id)) {
+          categoryPicks.push(product);
+        }
+      }
+
+      return categoryPicks.slice(0, 6);
+    }
+
     async function loadPopularProducts() {
+      const grid = document.getElementById('popularGrid');
+      const status = document.getElementById('trendingStatus');
+      const safeProducts = Array.isArray(products) ? products.filter(Boolean) : [];
+      if (!grid) return;
+
+      if (safeProducts.length === 0) {
+        if (status) status.textContent = 'No products available yet.';
+        grid.innerHTML = '<p>No trending items yet.</p>';
+        return;
+      }
+
+      const fallbackPopular = buildCategoryAverageTrending(safeProducts);
+
       try {
+        if (!db || typeof db.collection !== 'function') {
+          if (status) status.textContent = 'Category average picks while live view tracking warms up.';
+          renderTrendingProducts(fallbackPopular);
+          return;
+        }
+
         const snapshot = await db.collection('productCounters').orderBy('count', 'desc').limit(6).get();
-        if (snapshot.empty) return;
-        const popularIds = snapshot.docs.map(d => parseInt(d.id));
-        const popular = products.filter(p => popularIds.includes(p.id));
-        const grid = document.getElementById('popularGrid');
-        if (popular.length === 0) { grid.innerHTML = '<p>No trending items yet.</p>'; return; }
-        grid.innerHTML = popular.map(p => {
-          const isFav = userFavorites.includes(p.id);
-          const firstImg = p.images?.[0] || p.image;
-          return `
-            <div class="product-card" onclick="openDetailModal(${p.id})">
-              <div class="product-img">
-                <img src="${firstImg}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
-                <i class="fas ${p.icon||'fa-box'} fallback-icon" style="display:none;"></i>
-                <div class="fav-btn ${isFav?'active':''}" onclick="event.stopPropagation(); toggleFavorite(${p.id})">
+        if (!snapshot || !snapshot.docs || snapshot.docs.length === 0) {
+          if (status) status.textContent = 'Category average picks while live view tracking warms up.';
+          renderTrendingProducts(fallbackPopular);
+          return;
+        }
+
+        const popularIds = snapshot.docs
+          .map(d => Number(d.id))
+          .filter(id => !Number.isNaN(id));
+
+        const validTrendingIds = new Set(popularIds);
+        let popular = safeProducts.filter(p => validTrendingIds.has(Number(p.id)));
+
+        if (popular.length === 0) {
+          if (status) status.textContent = 'Category average picks while live view tracking warms up.';
+          popular = fallbackPopular;
+        } else if (status) {
+          status.textContent = 'Live popularity rankings';
+        }
+
+        renderTrendingProducts(popular.slice(0, 6));
+      } catch (e) {
+        console.warn('Trending products fallback activated.', e);
+        if (status) status.textContent = 'Category average picks while live view tracking warms up.';
+        renderTrendingProducts(fallbackPopular);
+      }
+    }
+
+    function renderTrendingProducts(popular) {
+      const grid = document.getElementById('popularGrid');
+      if (!grid) return;
+      if (!popular || popular.length === 0) { grid.innerHTML = '<p>No trending items yet.</p>'; return; }
+      grid.innerHTML = popular.map(p => {
+        const isFav = userFavorites.includes(p.id);
+        const firstImg = p.images?.[0] || p.image;
+        return `
+          <div class="product-card" onclick="openDetailModal(${p.id})">
+            <div class="product-img">
+              <img src="${firstImg}" alt="${p.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" />
+              <i class="fas ${p.icon||'fa-box'} fallback-icon" style="display:none;"></i>
+              <div class="fav-btn ${isFav?'active':''}" onclick="event.stopPropagation(); toggleFavorite(${p.id})">
                   <i class="${isFav?'fas':'far'} fa-heart"></i>
-                </div>
               </div>
-              <div class="product-info">
-                <div class="product-name">${p.name}</div>
-                <div class="product-price">KES ${p.priceKES.toLocaleString()}</div>
-                <button class="add-to-cart" onclick="event.stopPropagation(); addToCart(${p.id})">Add to Cart</button>
-              </div>
-            </div>`;
-        }).join('');
-      } catch (e) { /* ignore */ }
+            </div>
+            <div class="product-info">
+              <div class="product-name">${p.name}</div>
+              <div class="product-price">KES ${p.priceKES.toLocaleString()}</div>
+              <button class="add-to-cart" onclick="event.stopPropagation(); addToCart(${p.id})">Add to Cart</button>
+            </div>
+          </div>`;
+      }).join('');
     }
     async function incrementProductCounter(productId) {
+      if (!db || !db.collection) return;
       const ref = db.collection('productCounters').doc(productId.toString());
       try {
         await db.runTransaction(async t => {
@@ -598,20 +1453,61 @@
     async function loadReviews(productId) {
       const revContainer = document.getElementById('reviews-'+productId);
       if (!revContainer) return;
-      const snapshot = await db.collection('reviews').where('productId','==',productId).get();
+      if (!db || !db.collection) {
+        revContainer.innerHTML = '<div style="margin-top:1rem;"><strong>Rating:</strong> ★★★★☆ (reviews unavailable in local mode)</div>';
+        return;
+      }
+      // Modified to only load approved reviews
+      const snapshot = await db.collection('reviews')
+        .where('productId','==',productId)
+        .where('status', '==', 'approved') // Only fetch approved reviews
+        .orderBy('timestamp','desc')
+        .get();
       const reviews = snapshot.docs.map(d => d.data());
       const avg = reviews.reduce((sum,r) => sum + r.rating, 0) / (reviews.length || 1);
       let stars = ''; for (let i=1;i<=5;i++) stars += i <= Math.round(avg) ? '⭐' : '☆';
       revContainer.innerHTML = `<div style="margin-top:1rem;"><strong>Rating:</strong> ${stars} (${reviews.length} reviews)</div><ul>${reviews.map(r => `<li>${r.userName || 'User'}: ${r.rating}⭐ - ${r.comment||''}</li>`).join('')}</ul>`;
     }
-    window.writeReview = function(productId) {
-      if (!auth.currentUser) return alert('Please login to write a review.');
-      const rating = prompt('Your rating (1-5):'); if (!rating || isNaN(rating) || rating<1 || rating>5) return;
-      const comment = prompt('Your comment (optional):') || '';
+    // New function to toggle review form visibility
+    window.toggleReviewForm = function(productId, show) {
+      document.getElementById(`reviewForm-${productId}`).style.display = show ? 'block' : 'none';
+      document.getElementById(`writeReviewBtn-${productId}`).style.display = show ? 'none' : 'block';
+      if (!show) { // Clear form on cancel
+        document.getElementById(`reviewComment-${productId}`).value = '';
+        document.querySelector(`#reviewForm-${productId} .rating-stars`).dataset.rating = '0';
+        document.querySelectorAll(`#reviewForm-${productId} .rating-stars .star`).forEach(s => s.classList.remove('active'));
+      }
+    };
+
+    // Update the submitReview function to use the new form and set status as 'pending'
+    window.submitReview = function(productId) {
+      if (!auth || !auth.currentUser) {
+        alert('Please login to write a review.');
+        return;
+      }
+      if (!db || !db.collection) {
+        alert('Reviews are unavailable in this local/static mode.');
+        return;
+      }
+      const ratingElement = document.querySelector(`#reviewForm-${productId} .rating-stars`);
+      const rating = parseInt(ratingElement.dataset.rating || '0', 10);
+      if (rating === 0) {
+        alert('Please select a star rating.');
+        return;
+      }
+      const comment = document.getElementById(`reviewComment-${productId}`).value.trim();
+
       db.collection('reviews').add({
         productId, userId: auth.currentUser.uid, userName: auth.currentUser.displayName || auth.currentUser.email,
-        rating: Number(rating), comment, timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(() => { alert('Review submitted!'); loadReviews(productId); });
+        rating: Number(rating), comment, timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        status: 'pending' // New reviews are pending by default
+      }).then(() => {
+        alert('Your review has been submitted for moderation and will appear after approval.');
+        toggleReviewForm(productId, false); // Hide form after submission
+        // No need to reload reviews here as pending reviews are not shown
+      }).catch(e => {
+        alert('Error submitting review: ' + e.message);
+      });
     };
 
     // ==================== FREQUENTLY BOUGHT TOGETHER (NEW) ====================
@@ -659,62 +1555,24 @@
       } catch (e) { console.warn('Cross-sell load failed', e); }
     }
 
-    // ==================== PRODUCT DETAIL MODAL (with slider & cross-sell) ====================
-    window.openDetailModal = function(id) {
-      const p = products.find(pp => pp.id === id);
-      if (!p) return;
-
-      const allImages = (p.images && p.images.length) ? p.images : [p.image];
-      let sliderHTML = '';
-      if (allImages.length === 1) {
-        sliderHTML = `<img src="${allImages[0]}" style="max-width:100%; max-height:300px; border-radius:12px;" alt="${p.name}">`;
-      } else {
-        sliderHTML = `
-          <div style="position:relative; overflow:hidden; border-radius:12px;">
-            <div id="detailSlider" style="display:flex; transition: transform 0.3s ease;">
-              ${allImages.map(img => `<img src="${img}" style="min-width:100%; max-height:300px; object-fit:contain;" alt="${p.name}">`).join('')}
-            </div>
-            <button onclick="slideDetail(-1)" style="position:absolute; top:50%; left:5px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:2rem; height:2rem; cursor:pointer;">‹</button>
-            <button onclick="slideDetail(1)" style="position:absolute; top:50%; right:5px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:2rem; height:2rem; cursor:pointer;">›</button>
-          </div>
-        `;
-      }
-
-      document.getElementById('detailContent').innerHTML = `
-        <div style="text-align:center;">
-          ${sliderHTML}
-          <h2 style="margin-top:1rem;">${p.name}</h2>
-          <p style="font-size:1.4rem; font-weight:bold; color:#1b5e20;">KES ${p.priceKES.toLocaleString()}</p>
-          <p><i class="fas fa-star" style="color:#ffb300;"></i> ${p.rating||'4.5'} | ${p.category}</p>
-          <p style="margin:1rem 0; color:#555;">${p.description || 'No description available.'}</p>
-          <button class="add-to-cart" style="width:auto; padding:0.8rem 2rem;" onclick="addToCart(${p.id}); closeDetailModal();">Add to Cart</button>
-          <hr style="margin:1.5rem 0;">
-          <div id="reviews-${p.id}"></div>
-          <button class="auth-btn" style="width:auto; padding:0.5rem 2rem; margin-top:0.5rem;" onclick="writeReview(${p.id})">Write a Review</button>
-          <div id="crosssell-${p.id}" style="margin-top:1rem;"></div>
-        </div>`;
-      document.getElementById('detailModal').style.display = 'flex';
-      loadReviews(p.id);
-      loadCrossSell(p.id);
-
-      if (allImages.length > 1) {
-        window._detailSliderIndex = 0;
-        window._detailSliderTotal = allImages.length;
-        window.slideDetail = function(dir) {
-          window._detailSliderIndex = (window._detailSliderIndex + dir + window._detailSliderTotal) % window._detailSliderTotal;
-          document.getElementById('detailSlider').style.transform = `translateX(-${window._detailSliderIndex * 100}%)`;
-        };
-      } else {
-        window.slideDetail = function() {};
-      }
-    };
-    function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
-
     // ==================== CART (unchanged) ====================
     async function addToCart(productId) {
+      const p = products.find(pp => pp.id === productId);
+      if (!p || p.stock <= 0) {
+        alert('This product is out of stock!');
+        return;
+      }
+
       const existing = cart.find(i => i.id === productId);
-      if (existing) existing.quantity++;
-      else { const p = products.find(pp => pp.id === productId); if (p) cart.push({...p, quantity: 1}); }
+      if (existing) {
+        if (existing.quantity >= p.stock) {
+          alert('Cannot add more, maximum stock reached!');
+          return;
+        }
+        existing.quantity++;
+      } else {
+        cart.push({...p, quantity: 1});
+      }
       saveCart(); updateCartUI();
       await blockchain.addBlock({ type: 'cart_add', productId, productName: products.find(p=>p.id===productId).name });
       incrementProductCounter(productId); loadPopularProducts();
@@ -742,7 +1600,77 @@
     // ==================== MODAL HELPERS ====================
     function openModal(id) { document.getElementById(id).style.display = 'flex'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function closeDetailModal() { const modal = document.getElementById('detailModal'); if (modal) modal.style.display = 'none'; }
     window.openInfoModal = (title, content) => { document.getElementById('infoModalTitle').textContent = title; document.getElementById('infoModalContent').innerHTML = content; openModal('infoModal'); };
+    window.openDetailModal = function(id) {
+      const p = products.find(pp => pp.id === id);
+      if (!p) return;
+      incrementProductCounter(p.id);
+      const allImages = (p.images && p.images.length) ? p.images : [p.image];
+      let sliderHTML = '';
+      if (allImages.length === 1) {
+        sliderHTML = `<img src="${allImages[0]}" style="max-width:100%; max-height:300px; border-radius:12px;" alt="${p.name}">`;
+      } else {
+        sliderHTML = `
+          <div style="position:relative; overflow:hidden; border-radius:12px;">
+            <div id="detailSlider" style="display:flex; transition: transform 0.3s ease;">
+              ${allImages.map(img => `<img src="${img}" style="min-width:100%; max-height:300px; object-fit:contain;" alt="${p.name}">`).join('')}
+            </div>
+            <button onclick="slideDetail(-1)" style="position:absolute; top:50%; left:5px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:2rem; height:2rem; cursor:pointer;">‹</button>
+            <button onclick="slideDetail(1)" style="position:absolute; top:50%; right:5px; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:2rem; height:2rem; cursor:pointer;">›</button>
+          </div>`;
+      }
+      const inStock = p.stock > 0;
+      const stockStatusHTML = inStock ? `<p style="color:#2e7d32; font-weight:bold;">In Stock: ${p.stock} units</p>` : `<p style="color:#c62828; font-weight:bold;">Out of Stock</p>`;
+      document.getElementById('detailContent').innerHTML = `
+        <div style="text-align:center;">
+          ${sliderHTML}
+          <h2 style="margin-top:1rem;">${p.name}</h2>
+          <p style="font-size:1.4rem; font-weight:bold; color:#1b5e20;">KES ${p.priceKES.toLocaleString()}</p>
+          <p><i class="fas fa-star" style="color:#ffb300;"></i> ${p.rating||'4.5'} | ${p.category}</p>
+          ${stockStatusHTML}
+          <p style="margin-top: 0.5rem; color:#000;">🚚 Free standard shipping on orders over KES 10,000.</p>
+          <p style="margin:1rem 0; color:#555;">${p.description || 'No description available.'}</p>
+          <button class="add-to-cart" style="width:auto; padding:0.8rem 2rem;" onclick="addToCart(${p.id}); closeDetailModal();" ${!inStock ? 'disabled' : ''}>
+            <i class="fas fa-cart-plus"></i> ${inStock ? 'Add to Cart' : 'Out of Stock'}
+          </button>
+          <hr style="margin:1.5rem 0;">
+          <h3>Customer Reviews</h3>
+          <div id="reviews-${p.id}" style="text-align:left; max-height: 150px; overflow-y: auto; margin-bottom: 1rem;"></div>
+          <div id="reviewForm-${p.id}" style="display:none; text-align:left; border-top: 1px solid #eee; padding-top: 1rem;">
+            <h4>Your Review</h4>
+            <div class="rating-stars" data-product-id="${p.id}" data-rating="0">
+              <span class="star" data-value="1">★</span><span class="star" data-value="2">★</span><span class="star" data-value="3">★</span><span class="star" data-value="4">★</span><span class="star" data-value="5">★</span>
+            </div>
+            <textarea id="reviewComment-${p.id}" placeholder="Share your thoughts..." rows="3" style="width:100%; padding:0.5rem; margin-top:0.5rem; border:1px solid #ccc; border-radius:8px;"></textarea>
+            <button class="auth-btn" style="width:auto; padding:0.5rem 2rem; margin-top:0.5rem;" onclick="submitReview(${p.id})">Submit Review</button>
+            <button class="close-btn" style="width:auto; padding:0.5rem 1rem; margin-left:0.5rem; margin-top:0.5rem;" onclick="toggleReviewForm(${p.id}, false)">Cancel</button>
+          </div>
+          <button id="writeReviewBtn-${p.id}" class="auth-btn" style="width:auto; padding:0.5rem 2rem; margin-top:0.5rem;" onclick="toggleReviewForm(${p.id}, true)">Write a Review</button>
+          <div id="crosssell-${p.id}" style="margin-top:1rem;"></div>
+        </div>`;
+      document.getElementById('detailModal').style.display = 'flex';
+      loadReviews(p.id);
+      loadCrossSell(p.id);
+      document.querySelectorAll(`#reviewForm-${p.id} .rating-stars .star`).forEach(star => {
+        star.addEventListener('click', function() {
+          const rating = this.dataset.value;
+          this.parentNode.dataset.rating = rating;
+          let allStars = this.parentNode.querySelectorAll('.star');
+          allStars.forEach(s => { if (s.dataset.value <= rating) s.classList.add('active'); else s.classList.remove('active'); });
+        });
+      });
+      if (allImages.length > 1) {
+        window._detailSliderIndex = 0;
+        window._detailSliderTotal = allImages.length;
+        window.slideDetail = function(dir) {
+          window._detailSliderIndex = (window._detailSliderIndex + dir + window._detailSliderTotal) % window._detailSliderTotal;
+          document.getElementById('detailSlider').style.transform = `translateX(-${window._detailSliderIndex * 100}%)`;
+        };
+      } else {
+        window.slideDetail = function() {};
+      }
+    };
 
     // ==================== EVENT LISTENERS ====================
     document.getElementById('closeDetailBtn').addEventListener('click', closeDetailModal);
@@ -760,7 +1688,7 @@
 
     // Auth modals (same)
     document.getElementById('userIcon').addEventListener('click', () => {
-      if (auth.currentUser) {
+      if (auth && auth.currentUser) {
         const user = auth.currentUser;
         db.collection('users').doc(user.uid).get().then(doc => {
           const d = doc.exists ? doc.data() : {};
@@ -778,6 +1706,7 @@
     document.getElementById('showSignup').addEventListener('click', () => { closeModal('loginModal'); openModal('signupModal'); });
     document.getElementById('showLogin').addEventListener('click', () => { closeModal('signupModal'); openModal('loginModal'); });
     document.getElementById('signupBtn').addEventListener('click', async () => {
+      if (!auth) return alert('Account creation is unavailable in this environment.');
       const name = document.getElementById('signupName').value.trim();
       const email = document.getElementById('signupEmail').value.trim();
       const pass = document.getElementById('signupPassword').value;
@@ -785,13 +1714,15 @@
       catch (e) { alert('Signup failed: ' + e.message); }
     });
     document.getElementById('loginBtn').addEventListener('click', async () => {
+      if (!auth) return alert('Login is unavailable in this environment.');
       const email = document.getElementById('loginEmail').value.trim();
       const pass = document.getElementById('loginPassword').value;
       try { await auth.signInWithEmailAndPassword(email, pass); closeModal('loginModal'); }
       catch (e) { alert('Login failed: ' + e.message); }
     });
     document.getElementById('saveProfileBtn').addEventListener('click', async () => {
-      const u = auth.currentUser; if (!u) return;
+      if (!auth || !auth.currentUser) return alert('Please log in to save your profile.');
+      const u = auth.currentUser;
       const name = document.getElementById('profileName').value.trim();
       const phone = document.getElementById('profilePhone').value.trim();
       const street = document.getElementById('profileStreet').value.trim();
@@ -802,11 +1733,14 @@
       await db.collection('users').doc(u.uid).set({ name, phone, street, city, email: u.email, favorites: userFavorites }, { merge: true });
       alert('Profile updated!');
     });
-    document.getElementById('logoutBtn').addEventListener('click', () => { auth.signOut(); closeModal('profileModal'); });
+    document.getElementById('logoutBtn').addEventListener('click', () => { if (auth) auth.signOut(); closeModal('profileModal'); });
 
     // Orders modal (from unified 'orders' collection)
     document.getElementById('viewOrdersBtn').addEventListener('click', async () => {
-      if (!auth.currentUser) return;
+      if (!auth || !auth.currentUser || !db || !db.collection) {
+        alert('Order history is not available in this environment.');
+        return;
+      }
       const snap = await db.collection('orders').where('userId', '==', auth.currentUser.uid).orderBy('timestamp','desc').get();
       const oc = document.getElementById('ordersContent');
       if (snap.empty) { oc.innerHTML = '<p>No orders.</p>'; }
@@ -838,7 +1772,7 @@
     // ==================== PLACE ORDER (with email) ====================
     document.getElementById('placeOrderBtn').addEventListener('click', () => {
       if (cart.length === 0) return;
-      if (!auth.currentUser) openModal('guestCheckoutModal');
+      if (!auth || !auth.currentUser) openModal('guestCheckoutModal');
       else {
         db.collection('users').doc(auth.currentUser.uid).get().then(doc => {
           const data = doc.exists ? doc.data() : {};
@@ -873,6 +1807,10 @@
     });
 
     async function placeOrder(uid, customer) {
+      if (!db || !db.collection) {
+        alert('Checkout is unavailable in this local/static mode. Connect the backend services to enable order saving and email confirmation.');
+        return;
+      }
       const total = cart.reduce((s,i) => s + (i.priceKES * i.quantity), 0);
       const orderData = {
         items: cart.map(i => ({ id: i.id, name: i.name, priceKES: i.priceKES, quantity: i.quantity })),
@@ -886,15 +1824,19 @@
         const docRef = await db.collection('orders').add(orderData);
         await blockchain.addBlock({ type: 'order_placed', totalKES: total });
         // Send confirmation email
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: customer.email,
-            subject: `ElectroHub Order Confirmation – #${docRef.id.slice(0,6)}`,
-            html: `<h2>Thank you, ${customer.name}!</h2><p>Your order total is <strong>KES ${total.toLocaleString()}</strong>.</p><p>We'll notify you when it ships.</p><ul>${cart.map(i => `<li>${i.name} x${i.quantity} – KES ${(i.priceKES*i.quantity).toLocaleString()}</li>`).join('')}</ul>`
-          })
-        });
+        try {
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: customer.email,
+              subject: `ElectroHub Order Confirmation – #${docRef.id.slice(0,6)}`,
+              html: `<h2>Thank you, ${customer.name}!</h2><p>Your order total is <strong>KES ${total.toLocaleString()}</strong>.</p><p>We'll notify you when it ships.</p><ul>${cart.map(i => `<li>${i.name} x${i.quantity} – KES ${(i.priceKES*i.quantity).toLocaleString()}</li>`).join('')}</ul>`
+            })
+          });
+        } catch (emailError) {
+          console.warn('Email confirmation unavailable; order still saved.', emailError);
+        }
         alert('Order placed! Check your email.');
         cart = []; saveCart(); updateCartUI();
         closeModal('cartModal'); closeModal('guestCheckoutModal');
@@ -906,14 +1848,20 @@
       const phone = document.getElementById('guestPhone').value.trim();
       if (!phone) return alert('Enter your M‑Pesa phone number.');
       const total = cart.reduce((s,i) => s + (i.priceKES * i.quantity), 0);
-      const res = await fetch('/api/mpesa-stk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, amount: total })
-      });
-      const data = await res.json();
-      if (data.id) alert('STK Push sent! Check your phone to complete payment.');
-      else alert('M‑Pesa request failed: ' + (data.error || 'Unknown'));
+      try {
+        const res = await fetch('/api/mpesa-stk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, amount: total })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.id) alert('STK Push sent! Check your phone to complete payment.');
+        else alert('M‑Pesa request failed: ' + (data.error || 'Unknown'));
+      } catch (e) {
+        console.warn('M-Pesa unavailable in static mode.', e);
+        alert('M‑Pesa is unavailable in this environment. Configure the backend credentials to enable live payments.');
+      }
     });
 
     // Wishlist modal
@@ -923,9 +1871,26 @@
     // Search, sort, filter
     document.getElementById('searchBtn').addEventListener('click', () => { searchTerm = document.getElementById('searchInput').value.trim(); applyFiltersAndSort(); });
     document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key==='Enter') { searchTerm = e.target.value.trim(); applyFiltersAndSort(); } });
+    document.getElementById('searchInput').addEventListener('input', populateSearchSuggestions); // Add this line to update suggestions dynamically
     document.getElementById('sortSelect').addEventListener('change', function() { sortMode = this.value; applyFiltersAndSort(); });
     document.getElementById('filterBtn').addEventListener('click', () => { priceMin = document.getElementById('priceMin').value; priceMax = document.getElementById('priceMax').value; applyFiltersAndSort(); });
-
+    document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+      document.getElementById('sortSelect').value = 'default';
+      document.getElementById('priceMin').value = '';
+      document.getElementById('priceMax').value = '';
+      document.getElementById('searchInput').value = '';
+      document.getElementById('supplierSelect').value = 'all'; // Clear supplier filter
+      searchTerm = '';
+      sortMode = 'default';
+      priceMin = null;
+      priceMax = null;
+      currentSupplier = 'all'; // Reset currentSupplier
+      // Reset category to 'all' and update sidebar UI
+      document.querySelectorAll('.sidebar li[data-category]').forEach(li => li.style.fontWeight='normal');
+      document.querySelector('.sidebar li[data-category="all"]').style.fontWeight = 'bold';
+      currentCategory = 'all';
+      applyFiltersAndSort();
+    });
     // Chat
     const chatToggle = document.getElementById('chatToggle'), chatWindow = document.getElementById('chatWindow');
     chatToggle.addEventListener('click', () => { chatWindow.style.display = chatWindow.style.display==='flex'?'none':'flex'; });
@@ -939,22 +1904,35 @@
       msgs.innerHTML += `<p id="${typingId}"><em>AI thinking...</em></p>`;
       msgs.scrollTop = msgs.scrollHeight;
       fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: msg, products }) })
-        .then(r => r.json())
-        .then(data => {
-          document.getElementById(typingId).remove();
-          msgs.innerHTML += `<p><strong>AI:</strong> ${data.reply || 'No reply.'}</p>`;
+        .then(async r => {
+          const text = await r.text();
+          if (!r.ok || !text) throw new Error('No response');
+          try {
+            const data = JSON.parse(text);
+            document.getElementById(typingId).remove();
+            msgs.innerHTML += `<p><strong>AI:</strong> ${data.reply || 'No reply.'}</p>`;
+          } catch (err) {
+            document.getElementById(typingId).remove();
+            msgs.innerHTML += `<p><strong>AI:</strong> AI assistant is currently unavailable in this environment.</p>`;
+          }
           msgs.scrollTop = msgs.scrollHeight;
         })
         .catch(() => {
           document.getElementById(typingId).remove();
-          msgs.innerHTML += `<p><strong>AI:</strong> Unavailable.</p>`;
+          msgs.innerHTML += `<p><strong>AI:</strong> AI assistant is unavailable right now. Add the API credentials to enable live responses.</p>`;
         });
     });
 
     window.addEventListener('click', e => { if (e.target.classList.contains('modal-overlay')) e.target.style.display = 'none'; });
+
+    function populateSearchSuggestions() {
+      const datalist = document.getElementById('productSuggestions');
+      datalist.innerHTML = products.map(p => `<option value="${p.name}"></option>`).join('');
+    }
 
     // Init
     initializeFirebase();
   </script>
 </body>
 </html>
+

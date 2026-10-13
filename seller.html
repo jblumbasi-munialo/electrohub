@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ElectroHub Seller Portal</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #edf7ee; margin: 0; padding: 2rem; color: #111; }
+    .container { max-width: 980px; margin: 0 auto; background: white; border-radius: 18px; padding: 2rem; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+    h1 { color: #1b5e20; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .card { border: 1px solid #cde7d0; background: #f7fbf7; border-radius: 12px; padding: 1rem; }
+    label { display: block; font-weight: 600; margin-bottom: 0.5rem; margin-top: 1rem; }
+    input, textarea, select, button { width: 100%; box-sizing: border-box; padding: 0.75rem; border-radius: 10px; border: 1px solid #b9dfc2; font-size: 1rem; }
+    button { background: #2e7d32; color: white; border: none; font-weight: 700; cursor: pointer; margin-top: 1rem; }
+    .status { padding: 0.5rem 0.75rem; background: #dff5e4; color: #1b5e20; border-radius: 999px; font-weight: 700; display: inline-block; }
+    .small { font-size: 0.9rem; color: #3f5d44; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ElectroHub Seller Portal</h1>
+    <p class="small">This is the first seller onboarding and product ownership milestone.</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Seller onboarding</h2>
+        <label>Owner name</label>
+        <input id="ownerName" placeholder="Jane Doe" />
+
+        <label>Business name</label>
+        <input id="businessName" placeholder="Mifumo Tech Ltd" />
+
+        <label>Store name</label>
+        <input id="storeName" placeholder="Mifumo Gadgets" />
+
+        <label>Email</label>
+        <input id="sellerEmail" type="email" placeholder="seller@example.com" />
+
+        <label>Phone</label>
+        <input id="sellerPhone" placeholder="+254712345678" />
+
+        <button id="createSellerBtn">Create Seller Profile</button>
+      </div>
+
+      <div class="card">
+        <h2>Add seller product</h2>
+        <label>Seller ID</label>
+        <input id="sellerId" placeholder="Seller id from onboarding" />
+
+        <label>Seller access token</label>
+        <input id="sellerToken" type="password" placeholder="Issued when the profile is created" />
+
+        <label>Product name</label>
+        <input id="productName" placeholder="Dell Latitude 7440" />
+
+        <label>Category</label>
+        <select id="productCategory">
+          <option>Smartphone</option>
+          <option>Laptop</option>
+          <option>Headphone</option>
+          <option>Tablet</option>
+          <option>Camera</option>
+          <option>Accessory</option>
+        </select>
+
+        <label>Price (KES)</label>
+        <input id="productPrice" type="number" value="25000" />
+
+        <label>Main image URL</label>
+        <input id="productImage" placeholder="https://...jpg" />
+
+        <label>Seller display name</label>
+        <input id="sellerDisplayName" placeholder="Mifumo Gadgets" />
+
+        <button id="createProductBtn">Create Product</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem;">
+      <h2>Seller status</h2>
+      <div id="sellerStatus" class="status">No seller loaded</div>
+    </div>
+  </div>
+
+  <script>
+    const createSellerBtn = document.getElementById('createSellerBtn');
+    const createProductBtn = document.getElementById('createProductBtn');
+    const sellerStatus = document.getElementById('sellerStatus');
+    document.getElementById('sellerToken').value = localStorage.getItem('electrohubSellerToken') || '';
+
+    async function refreshSellerStatus() {
+      const sellerToken = document.getElementById('sellerToken').value.trim();
+      if (!sellerToken) return;
+
+      try {
+        const res = await fetch('/api/sellers', { headers: { 'x-seller-token': sellerToken } });
+        const seller = await res.json();
+        if (!res.ok || !seller) throw new Error('Seller profile unavailable.');
+        document.getElementById('sellerId').value = seller.id;
+        sellerStatus.textContent = `Seller: ${seller.store_name} (${seller.status})`;
+        sellerStatus.style.background = seller.status === 'approved' ? '#dff5e4' : '#fff1cc';
+      } catch (error) {
+        sellerStatus.textContent = error.message;
+        sellerStatus.style.background = '#ffe2e2';
+      }
+    }
+
+    refreshSellerStatus();
+
+    createSellerBtn.addEventListener('click', async () => {
+      const payload = {
+        ownerName: document.getElementById('ownerName').value.trim(),
+        businessName: document.getElementById('businessName').value.trim(),
+        storeName: document.getElementById('storeName').value.trim(),
+        email: document.getElementById('sellerEmail').value.trim(),
+        phone: document.getElementById('sellerPhone').value.trim(),
+      };
+
+      try {
+        const res = await fetch('/api/sellers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Seller onboarding failed');
+        document.getElementById('sellerId').value = data.id;
+        document.getElementById('sellerToken').value = data.accessToken;
+        localStorage.setItem('electrohubSellerToken', data.accessToken);
+        sellerStatus.textContent = `Seller created: ${data.store_name} is pending admin approval.`;
+        sellerStatus.style.background = '#dff5e4';
+        alert('Seller created successfully.');
+      } catch (error) {
+        sellerStatus.textContent = error.message;
+        sellerStatus.style.background = '#ffe2e2';
+        alert(error.message);
+      }
+    });
+
+    createProductBtn.addEventListener('click', async () => {
+      const sellerToken = document.getElementById('sellerToken').value.trim();
+      if (!sellerToken) {
+        alert('Create a seller profile or enter its access token before submitting a product.');
+        return;
+      }
+      const payload = {
+        name: document.getElementById('productName').value.trim(),
+        category: document.getElementById('productCategory').value,
+        priceKES: Number(document.getElementById('productPrice').value),
+        image: document.getElementById('productImage').value.trim(),
+        images: [document.getElementById('productImage').value.trim()],
+        icon: 'fa-box',
+        rating: 4.5,
+        supplier: 'Seller Listing',
+        description: 'Seller-created listing.',
+        sellerName: document.getElementById('sellerDisplayName').value.trim() || 'Seller',
+        approved: false
+      };
+
+      try {
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-seller-token': sellerToken
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Product creation failed');
+        alert('Seller product submitted for review.');
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+  </script>
+</body>
+</html>
